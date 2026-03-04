@@ -1,0 +1,12 @@
+@using Sandbox.UI
+
+@namespace sGBA
+
+@inherits PanelComponent
+
+<root class="emulator-screen">
+	@if (EmulatorComponent.Current.IsValid() && EmulatorComponent.Current.IsReady)
+	{
+		<Image class="gba-display" Texture="@EmulatorComponent.Current?.ScreenTexture" />
+	}
+</root>

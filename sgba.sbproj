@@ -1,0 +1,25 @@
+{
+  "Title": "sGBA",
+  "Type": "game",
+  "Org": "softsplit",
+  "Ident": "sgba",
+  "Schema": 1,
+  "IncludeSourceFiles": false,
+  "Resources": null,
+  "PackageReferences": [],
+  "EditorReferences": null,
+  "Mounts": null,
+  "IsStandaloneOnly": false,
+  "Metadata": {
+    "MaxPlayers": 64,
+    "MinPlayers": 1,
+    "RankType": "None",
+    "CsProjName": "",
+    "StartupScene": "scenes/minimal.scene",
+    "ControlModes": {
+      "Keyboard": true,
+      "VR": false,
+      "Gamepad": true
+    }
+  }
+}
