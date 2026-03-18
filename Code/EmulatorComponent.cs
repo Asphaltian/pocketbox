@@ -28,15 +28,20 @@ public sealed partial class EmulatorComponent : Component
 	private int _workerBufIdx;
 	private double _frameDebt;
 
+	private bool _paused;
+	private int _inputCooldown;
+	private byte[] _lastFramePixels;
+	private string _stateBasePath;
+
 	private readonly struct FramePacket( byte[] p, short[] a, int ac, byte[] s )
-    {
+	{
 		public readonly byte[] Pixels = p;
 		public readonly short[] Audio = a;
 		public readonly int AudioSamples = ac;
 		public readonly byte[] SaveData = s;
-    }
+	}
 
-    protected override void OnStart()
+	protected override void OnStart()
 	{
 		Current = this;
 
@@ -74,6 +79,8 @@ public sealed partial class EmulatorComponent : Component
 
 			Core.Reset();
 			IsReady = true;
+
+			_stateBasePath = "states/" + System.IO.Path.GetFileNameWithoutExtension( RomPath );
 
 			try { InitAudioStream(); }
 			catch ( Exception audioEx ) { Log.Warning( $"Audio init failed: {audioEx.Message}" ); }
@@ -181,15 +188,18 @@ public sealed partial class EmulatorComponent : Component
 			catch { _audioStream = null; }
 		}
 
-		_frameDebt += RealTime.Delta;
-		if ( _frameDebt > GbaFrameTime * 3 )
-			_frameDebt = GbaFrameTime * 3;
-
-		while ( _frameDebt >= GbaFrameTime )
+		if ( !_paused )
 		{
-			_frameDebt -= GbaFrameTime;
-			if ( _frameSemaphore.CurrentCount < 4 )
-				_frameSemaphore.Release();
+			_frameDebt += RealTime.Delta;
+			if ( _frameDebt > GbaFrameTime * 3 )
+				_frameDebt = GbaFrameTime * 3;
+
+			while ( _frameDebt >= GbaFrameTime )
+			{
+				_frameDebt -= GbaFrameTime;
+				if ( _frameSemaphore.CurrentCount < 4 )
+					_frameSemaphore.Release();
+			}
 		}
 
 		FramePacket lastFrame = default;
@@ -212,6 +222,9 @@ public sealed partial class EmulatorComponent : Component
 
 		if ( hasFrame )
 		{
+			_lastFramePixels ??= new byte[lastFrame.Pixels.Length];
+			Buffer.BlockCopy( lastFrame.Pixels, 0, _lastFramePixels, 0, lastFrame.Pixels.Length );
+
 			ScreenTexture.Update( new ReadOnlySpan<byte>( lastFrame.Pixels ),
 				0, 0, GbaConstants.ScreenWidth, GbaConstants.ScreenHeight );
 		}
@@ -221,6 +234,24 @@ public sealed partial class EmulatorComponent : Component
 
 	private void PollInput()
 	{
+		if ( _paused ) return;
+
+		if ( _inputCooldown > 0 )
+		{
+			bool anyHeld = Input.Down( "GBA_A" ) || Input.Down( "GBA_B" ) ||
+				Input.Down( "GBA_Start" ) || Input.Down( "GBA_Select" ) ||
+				Input.Down( "GBA_L" ) || Input.Down( "GBA_R" ) ||
+				Input.Down( "GBA_Up" ) || Input.Down( "GBA_Down" ) ||
+				Input.Down( "GBA_Left" ) || Input.Down( "GBA_Right" ) ||
+				MathF.Abs( Input.GetAnalog( InputAnalog.LeftStickX ) ) > StickDeadzone ||
+				MathF.Abs( Input.GetAnalog( InputAnalog.LeftStickY ) ) > StickDeadzone;
+
+			if ( anyHeld )
+				return;
+
+			_inputCooldown = 0;
+		}
+
 		int keys = 0x03FF;
 		if ( Input.Down( "GBA_A" ) ) keys &= ~(int)GbaKey.A;
 		if ( Input.Down( "GBA_B" ) ) keys &= ~(int)GbaKey.B;
@@ -237,6 +268,69 @@ public sealed partial class EmulatorComponent : Component
 		if ( Input.Down( "GBA_Right" ) || stickX > StickDeadzone ) keys &= ~(int)GbaKey.Right;
 
 		Interlocked.Exchange( ref _inputKeys, keys );
+	}
+
+	public void SetPaused( bool paused )
+	{
+		_paused = paused;
+		if ( paused )
+		{
+			_frameDebt = 0;
+			if ( _soundHandle.IsValid )
+				_soundHandle.Volume = 0;
+		}
+		else
+		{
+			_inputCooldown = 2;
+			if ( _soundHandle.IsValid )
+				_soundHandle.Volume = 1.0f;
+		}
+	}
+
+	public string GetStatePath( int slot ) => $"{_stateBasePath}.ss{slot}";
+
+	public void CreateSuspendPoint( int slot )
+	{
+		if ( Core == null ) return;
+		try
+		{
+			var data = SaveState.Save( Core, _lastFramePixels );
+			var path = GetStatePath( slot );
+			FileSystem.Data.WriteAllBytes( path, data );
+			Log.Info( $"Suspend point created in slot {slot}" );
+		}
+		catch ( Exception ex )
+		{
+			Log.Error( $"Failed to create suspend point {slot}: {ex.Message}" );
+		}
+	}
+
+	public void LoadSuspendPoint( int slot )
+	{
+		if ( Core == null ) return;
+		try
+		{
+			var path = GetStatePath( slot );
+			if ( !FileSystem.Data.FileExists( path ) )
+			{
+				Log.Warning( $"No suspend point in slot {slot}" );
+				return;
+			}
+
+			var data = FileSystem.Data.ReadAllBytes( path ).ToArray();
+			SaveState.Load( Core, data );
+			Log.Info( $"Suspend point loaded from slot {slot}" );
+		}
+		catch ( Exception ex )
+		{
+			Log.Error( $"Failed to load suspend point {slot}: {ex.Message}" );
+		}
+	}
+
+	public void ResetEmulator()
+	{
+		Core?.Reset();
+		Log.Info( "Emulator reset" );
 	}
 
 	protected override void OnDestroy()

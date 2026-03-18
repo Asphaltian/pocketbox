@@ -1,4 +1,6 @@
-﻿namespace sGBA;
+﻿using System.IO;
+
+namespace sGBA;
 
 public partial class Arm7Cpu
 {
@@ -199,6 +201,20 @@ public partial class Arm7Cpu
 			Cycles += 2 + Bus.WaitstatesNonseq16[region] + Bus.WaitstatesSeq16[region];
 		else
 			Cycles += 2 + Bus.WaitstatesNonseq32[region] + Bus.WaitstatesSeq32[region];
+	}
+
+	public void SerializePipeline( BinaryWriter w )
+	{
+		w.Write( _pipelineFlushed );
+		w.Write( _pipeline0 );
+		w.Write( _pipeline1 );
+	}
+
+	public void DeserializePipeline( BinaryReader r )
+	{
+		_pipelineFlushed = r.ReadBoolean();
+		_pipeline0 = r.ReadUInt32();
+		_pipeline1 = r.ReadUInt32();
 	}
 
 	public void RaiseIrq()

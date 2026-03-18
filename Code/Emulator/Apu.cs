@@ -1,4 +1,6 @@
-﻿namespace sGBA;
+﻿using System.IO;
+
+namespace sGBA;
 
 public partial class Apu
 {
@@ -311,5 +313,101 @@ public partial class Apu
 				SamplesWritten++;
 			}
 		}
+	}
+
+	public void SerializeState( BinaryWriter w )
+	{
+		w.Write( _nextSampleCycle );
+		w.Write( _nextFrameSeqCycle );
+		w.Write( _frameSeqStep );
+		w.Write( _totalCycles );
+
+		w.Write( _volumeRight ); w.Write( _volumeLeft );
+		w.Write( _psgCh1Right ); w.Write( _psgCh2Right ); w.Write( _psgCh3Right ); w.Write( _psgCh4Right );
+		w.Write( _psgCh1Left ); w.Write( _psgCh2Left ); w.Write( _psgCh3Left ); w.Write( _psgCh4Left );
+		w.Write( _psgVolume );
+		w.Write( _volumeChA ); w.Write( _volumeChB );
+		w.Write( _chARight ); w.Write( _chALeft ); w.Write( _chATimer );
+		w.Write( _chBRight ); w.Write( _chBLeft ); w.Write( _chBTimer );
+
+		WriteFifo( w, ref _fifoA );
+		WriteFifo( w, ref _fifoB );
+
+		w.Write( _ch1Playing ); w.Write( _ch1Frequency ); w.Write( _ch1Length ); w.Write( _ch1Stop );
+		w.Write( _ch1DutyIndex ); w.Write( _ch1Duty ); w.Write( _ch1Sample ); w.Write( _ch1LastUpdate );
+		w.Write( _ch1EnvVolume ); w.Write( _ch1EnvStepTime ); w.Write( _ch1EnvDirection );
+		w.Write( _ch1EnvInitVolume ); w.Write( _ch1EnvDead ); w.Write( _ch1EnvNextStep );
+		w.Write( _ch1SweepShift ); w.Write( _ch1SweepDirection ); w.Write( _ch1SweepTime );
+		w.Write( _ch1SweepStep ); w.Write( _ch1SweepEnable ); w.Write( _ch1SweepOccurred ); w.Write( _ch1SweepRealFreq );
+
+		w.Write( _ch2Playing ); w.Write( _ch2Frequency ); w.Write( _ch2Length ); w.Write( _ch2Stop );
+		w.Write( _ch2DutyIndex ); w.Write( _ch2Duty ); w.Write( _ch2Sample ); w.Write( _ch2LastUpdate );
+		w.Write( _ch2EnvVolume ); w.Write( _ch2EnvStepTime ); w.Write( _ch2EnvDirection );
+		w.Write( _ch2EnvInitVolume ); w.Write( _ch2EnvDead ); w.Write( _ch2EnvNextStep );
+
+		w.Write( _ch3Playing ); w.Write( _ch3Enable ); w.Write( _ch3Size ); w.Write( _ch3Bank );
+		w.Write( _ch3Volume ); w.Write( _ch3Rate ); w.Write( _ch3Length ); w.Write( _ch3Stop );
+		w.Write( _ch3Window ); w.Write( _ch3Sample ); w.Write( _ch3NextUpdate );
+
+		w.Write( _ch4Playing ); w.Write( _ch4Ratio ); w.Write( _ch4Frequency ); w.Write( _ch4Power );
+		w.Write( _ch4Length ); w.Write( _ch4Stop ); w.Write( _ch4Lfsr ); w.Write( _ch4Sample ); w.Write( _ch4LastEvent );
+		w.Write( _ch4EnvVolume ); w.Write( _ch4EnvStepTime ); w.Write( _ch4EnvDirection );
+		w.Write( _ch4EnvInitVolume ); w.Write( _ch4EnvDead ); w.Write( _ch4EnvNextStep );
+	}
+
+	public void DeserializeState( BinaryReader r )
+	{
+		_nextSampleCycle = r.ReadInt64();
+		_nextFrameSeqCycle = r.ReadInt64();
+		_frameSeqStep = r.ReadInt32();
+		_totalCycles = r.ReadInt64();
+
+		_volumeRight = r.ReadInt32(); _volumeLeft = r.ReadInt32();
+		_psgCh1Right = r.ReadBoolean(); _psgCh2Right = r.ReadBoolean(); _psgCh3Right = r.ReadBoolean(); _psgCh4Right = r.ReadBoolean();
+		_psgCh1Left = r.ReadBoolean(); _psgCh2Left = r.ReadBoolean(); _psgCh3Left = r.ReadBoolean(); _psgCh4Left = r.ReadBoolean();
+		_psgVolume = r.ReadInt32();
+		_volumeChA = r.ReadBoolean(); _volumeChB = r.ReadBoolean();
+		_chARight = r.ReadBoolean(); _chALeft = r.ReadBoolean(); _chATimer = r.ReadBoolean();
+		_chBRight = r.ReadBoolean(); _chBLeft = r.ReadBoolean(); _chBTimer = r.ReadBoolean();
+
+		ReadFifo( r, ref _fifoA );
+		ReadFifo( r, ref _fifoB );
+
+		_ch1Playing = r.ReadBoolean(); _ch1Frequency = r.ReadInt32(); _ch1Length = r.ReadInt32(); _ch1Stop = r.ReadBoolean();
+		_ch1DutyIndex = r.ReadInt32(); _ch1Duty = r.ReadInt32(); _ch1Sample = r.ReadInt32(); _ch1LastUpdate = r.ReadInt64();
+		_ch1EnvVolume = r.ReadInt32(); _ch1EnvStepTime = r.ReadInt32(); _ch1EnvDirection = r.ReadBoolean();
+		_ch1EnvInitVolume = r.ReadInt32(); _ch1EnvDead = r.ReadInt32(); _ch1EnvNextStep = r.ReadInt32();
+		_ch1SweepShift = r.ReadInt32(); _ch1SweepDirection = r.ReadBoolean(); _ch1SweepTime = r.ReadInt32();
+		_ch1SweepStep = r.ReadInt32(); _ch1SweepEnable = r.ReadBoolean(); _ch1SweepOccurred = r.ReadBoolean(); _ch1SweepRealFreq = r.ReadInt32();
+
+		_ch2Playing = r.ReadBoolean(); _ch2Frequency = r.ReadInt32(); _ch2Length = r.ReadInt32(); _ch2Stop = r.ReadBoolean();
+		_ch2DutyIndex = r.ReadInt32(); _ch2Duty = r.ReadInt32(); _ch2Sample = r.ReadInt32(); _ch2LastUpdate = r.ReadInt64();
+		_ch2EnvVolume = r.ReadInt32(); _ch2EnvStepTime = r.ReadInt32(); _ch2EnvDirection = r.ReadBoolean();
+		_ch2EnvInitVolume = r.ReadInt32(); _ch2EnvDead = r.ReadInt32(); _ch2EnvNextStep = r.ReadInt32();
+
+		_ch3Playing = r.ReadBoolean(); _ch3Enable = r.ReadBoolean(); _ch3Size = r.ReadBoolean(); _ch3Bank = r.ReadBoolean();
+		_ch3Volume = r.ReadInt32(); _ch3Rate = r.ReadInt32(); _ch3Length = r.ReadInt32(); _ch3Stop = r.ReadBoolean();
+		_ch3Window = r.ReadInt32(); _ch3Sample = r.ReadInt32(); _ch3NextUpdate = r.ReadInt64();
+
+		_ch4Playing = r.ReadBoolean(); _ch4Ratio = r.ReadInt32(); _ch4Frequency = r.ReadInt32(); _ch4Power = r.ReadBoolean();
+		_ch4Length = r.ReadInt32(); _ch4Stop = r.ReadBoolean(); _ch4Lfsr = r.ReadUInt32(); _ch4Sample = r.ReadInt32(); _ch4LastEvent = r.ReadInt64();
+		_ch4EnvVolume = r.ReadInt32(); _ch4EnvStepTime = r.ReadInt32(); _ch4EnvDirection = r.ReadBoolean();
+		_ch4EnvInitVolume = r.ReadInt32(); _ch4EnvDead = r.ReadInt32(); _ch4EnvNextStep = r.ReadInt32();
+	}
+
+	private static void WriteFifo( BinaryWriter w, ref FifoState fifo )
+	{
+		for ( int i = 0; i < 8; i++ ) w.Write( fifo.Buffer[i] );
+		w.Write( fifo.Write ); w.Write( fifo.Read );
+		w.Write( fifo.Internal ); w.Write( fifo.Remaining );
+		w.Write( fifo.Sample );
+	}
+
+	private static void ReadFifo( BinaryReader r, ref FifoState fifo )
+	{
+		for ( int i = 0; i < 8; i++ ) fifo.Buffer[i] = r.ReadUInt32();
+		fifo.Write = r.ReadInt32(); fifo.Read = r.ReadInt32();
+		fifo.Internal = r.ReadUInt32(); fifo.Remaining = r.ReadInt32();
+		fifo.Sample = r.ReadSByte();
 	}
 }

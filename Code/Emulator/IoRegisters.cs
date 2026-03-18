@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace sGBA;
 
 public class IoRegisters
@@ -296,22 +298,22 @@ public class IoRegisters
 		{
 			case 0x000: Gba.Ppu.DispCnt = value; break;
 			case 0x004:
-			{
-				ushort dispstat = (ushort)((Gba.Ppu.DispStat & 0x7) | (value & 0xFFF8));
-				int lyc = (dispstat >> 8) & 0xFF;
-				if ( Gba.Ppu.VCount == lyc )
 				{
-					if ( (dispstat & 0x0020) != 0 && (dispstat & 0x0004) == 0 )
-						RaiseIrq( IrqFlag.VCountMatch );
-					dispstat |= 0x0004;
+					ushort dispstat = (ushort)((Gba.Ppu.DispStat & 0x7) | (value & 0xFFF8));
+					int lyc = (dispstat >> 8) & 0xFF;
+					if ( Gba.Ppu.VCount == lyc )
+					{
+						if ( (dispstat & 0x0020) != 0 && (dispstat & 0x0004) == 0 )
+							RaiseIrq( IrqFlag.VCountMatch );
+						dispstat |= 0x0004;
+					}
+					else
+					{
+						dispstat &= unchecked((ushort)~0x0004);
+					}
+					Gba.Ppu.DispStat = dispstat;
+					break;
 				}
-				else
-				{
-					dispstat &= unchecked((ushort)~0x0004);
-				}
-				Gba.Ppu.DispStat = dispstat;
-				break;
-			}
 			case 0x006: break;
 			case 0x008: Gba.Ppu.BgCnt[0] = value; break;
 			case 0x00A: Gba.Ppu.BgCnt[1] = value; break;
@@ -442,19 +444,19 @@ public class IoRegisters
 				break;
 
 			case >= 0x0B0 and <= 0x0DE:
-			{
-				int ch = (int)(offset - 0x0B0) / 12;
-				switch ( (offset - 0x0B0) % 12 )
 				{
-					case 0: Gba.Dma.Channels[ch].SrcLow = value; break;
-					case 2: Gba.Dma.Channels[ch].SrcHigh = value; break;
-					case 4: Gba.Dma.Channels[ch].DstLow = value; break;
-					case 6: Gba.Dma.Channels[ch].DstHigh = value; break;
-					case 8: Gba.Dma.Channels[ch].WordCount = value; break;
-					case 10: Gba.Dma.WriteControl( ch, value ); break;
+					int ch = (int)(offset - 0x0B0) / 12;
+					switch ( (offset - 0x0B0) % 12 )
+					{
+						case 0: Gba.Dma.Channels[ch].SrcLow = value; break;
+						case 2: Gba.Dma.Channels[ch].SrcHigh = value; break;
+						case 4: Gba.Dma.Channels[ch].DstLow = value; break;
+						case 6: Gba.Dma.Channels[ch].DstHigh = value; break;
+						case 8: Gba.Dma.Channels[ch].WordCount = value; break;
+						case 10: Gba.Dma.WriteControl( ch, value ); break;
+					}
+					break;
 				}
-				break;
-			}
 
 			case 0x100: Gba.Timers.Channels[0].Reload = value; break;
 			case 0x102: Gba.Timers.WriteControl( 0, value ); break;
@@ -517,6 +519,24 @@ public class IoRegisters
 			case 0x208: IME = (ushort)(value & 1); CheckIrq(); break;
 			case 0x300: PostBoot = (byte)value; break;
 		}
+	}
+
+	public void SerializeState( BinaryWriter w )
+	{
+		w.Write( _irqFireCycle );
+		w.Write( _fifoALatch );
+		w.Write( _fifoBLatch );
+		w.Write( _sioCnt );
+		w.Write( _keysLast );
+	}
+
+	public void DeserializeState( BinaryReader r )
+	{
+		_irqFireCycle = r.ReadInt64();
+		_fifoALatch = r.ReadUInt16();
+		_fifoBLatch = r.ReadUInt16();
+		_sioCnt = r.ReadUInt16();
+		_keysLast = r.ReadUInt16();
 	}
 }
 

@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace sGBA;
 
 public class GpioController
@@ -325,5 +327,39 @@ public class GpioController
 		{
 			HasRtc = true;
 		}
+	}
+
+	public void SerializeState( BinaryWriter w )
+	{
+		w.Write( _writeLatch );
+		w.Write( _pinState );
+		w.Write( _direction );
+		w.Write( _readWrite );
+		w.Write( _rtcBytesRemaining );
+		w.Write( _rtcBitsRead );
+		w.Write( _rtcBits );
+		w.Write( _rtcCommandActive );
+		w.Write( _rtcSckEdge );
+		w.Write( _rtcSioOutput );
+		w.Write( _rtcCommand );
+		w.Write( _rtcControl );
+		w.Write( _rtcTime );
+	}
+
+	public void DeserializeState( BinaryReader r )
+	{
+		_writeLatch = r.ReadByte();
+		_pinState = r.ReadByte();
+		_direction = r.ReadByte();
+		_readWrite = r.ReadBoolean();
+		_rtcBytesRemaining = r.ReadInt32();
+		_rtcBitsRead = r.ReadInt32();
+		_rtcBits = r.ReadInt32();
+		_rtcCommandActive = r.ReadBoolean();
+		_rtcSckEdge = r.ReadBoolean();
+		_rtcSioOutput = r.ReadBoolean();
+		_rtcCommand = r.ReadInt32();
+		_rtcControl = r.ReadByte();
+		r.Read( _rtcTime );
 	}
 }

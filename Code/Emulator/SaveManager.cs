@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 
 namespace sGBA;
@@ -378,6 +379,40 @@ public class SaveManager
 				_flashState = FlashState.Ready;
 				break;
 		}
+	}
+
+	public void SerializeState( BinaryWriter w )
+	{
+		w.Write( (int)_flashState );
+		w.Write( _flashBank );
+		w.Write( _flashIdMode );
+		w.Write( FlashManufacturerId );
+		w.Write( FlashDeviceId );
+		w.Write( (int)_eepromCommand );
+		w.Write( _eepromBitsRemaining );
+		w.Write( _eepromReadAddress );
+		w.Write( _eepromWriteAddress );
+		w.Write( _eepromSettling );
+		w.Write( _eepromSettleCycles );
+		w.Write( IsDirty );
+		w.Write( _dirtyFrameCount );
+	}
+
+	public void DeserializeState( BinaryReader r )
+	{
+		_flashState = (FlashState)r.ReadInt32();
+		_flashBank = r.ReadInt32();
+		_flashIdMode = r.ReadBoolean();
+		FlashManufacturerId = r.ReadByte();
+		FlashDeviceId = r.ReadByte();
+		_eepromCommand = (EepromCommand)r.ReadInt32();
+		_eepromBitsRemaining = r.ReadInt32();
+		_eepromReadAddress = r.ReadUInt32();
+		_eepromWriteAddress = r.ReadUInt32();
+		_eepromSettling = r.ReadBoolean();
+		_eepromSettleCycles = r.ReadInt32();
+		IsDirty = r.ReadBoolean();
+		_dirtyFrameCount = r.ReadInt32();
 	}
 }
 
