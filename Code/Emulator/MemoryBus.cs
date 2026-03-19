@@ -140,10 +140,10 @@ public class MemoryBus
 		WaitstatesNonseq32[12] = WaitstatesNonseq32[13] = ws2N + 1 + ws2S;
 		WaitstatesSeq32[12] = WaitstatesSeq32[13] = ws2S + 1 + ws2S;
 
-		WaitstatesNonseq16[14] = sramWait;
-		WaitstatesSeq16[14] = sramWait;
-		WaitstatesNonseq32[14] = sramWait + 1 + sramWait;
-		WaitstatesSeq32[14] = sramWait + 1 + sramWait;
+		WaitstatesNonseq16[14] = WaitstatesNonseq16[15] = sramWait;
+		WaitstatesSeq16[14] = WaitstatesSeq16[15] = sramWait;
+		WaitstatesNonseq32[14] = WaitstatesNonseq32[15] = sramWait + 1 + sramWait;
+		WaitstatesSeq32[14] = WaitstatesSeq32[15] = sramWait + 1 + sramWait;
 	}
 
 	public void LoadRom( byte[] romData )
@@ -213,7 +213,13 @@ public class MemoryBus
 			case 0x3: return Iwram[address & 0x7FFF];
 			case 0x4: return ReadIO8( address );
 			case 0x5: return PaletteRam[address & 0x3FF];
-			case 0x6: return Vram[MapVramAddress( address )];
+			case 0x6:
+				{
+					uint rawAddr = address & 0x1FFFF;
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+						return 0;
+					return Vram[MapVramAddress( address )];
+				}
 			case 0x7: return Oam[address & 0x3FF];
 
 			case 0x8:
@@ -268,7 +274,13 @@ public class MemoryBus
 			case 0x3: return ReadHalfFromArray( Iwram, address & 0x7FFF );
 			case 0x4: return ReadIO16( address );
 			case 0x5: return ReadHalfFromArray( PaletteRam, address & 0x3FF );
-			case 0x6: return ReadHalfFromArray( Vram, MapVramAddress( address ) );
+			case 0x6:
+				{
+					uint rawAddr = address & 0x1FFFF;
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+						return 0;
+					return ReadHalfFromArray( Vram, MapVramAddress( address ) );
+				}
 			case 0x7: return ReadHalfFromArray( Oam, address & 0x3FF );
 
 			case 0x8:
@@ -329,7 +341,13 @@ public class MemoryBus
 			case 0x3: return ReadWordFromArray( Iwram, address & 0x7FFF );
 			case 0x4: return ReadIO32( address );
 			case 0x5: return ReadWordFromArray( PaletteRam, address & 0x3FF );
-			case 0x6: return ReadWordFromArray( Vram, MapVramAddress( address ) );
+			case 0x6:
+				{
+					uint rawAddr = address & 0x1FFFF;
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+						return 0;
+					return ReadWordFromArray( Vram, MapVramAddress( address ) );
+				}
 			case 0x7: return ReadWordFromArray( Oam, address & 0x3FF );
 
 			case 0x8:
@@ -365,13 +383,12 @@ public class MemoryBus
 				break;
 			case 0x6:
 				{
-					uint addr = MapVramAddress( address ) & ~1u;
 					uint objThreshold = (uint)((Gba.Ppu.DispCnt & 7) >= 3 ? 0x14000 : 0x10000);
-					if ( addr < objThreshold )
-					{
-						Vram[addr] = value;
-						Vram[addr + 1] = value;
-					}
+					if ( (address & 0x1FFFF) >= objThreshold )
+						break;
+					uint addr = address & 0x1FFFE;
+					Vram[addr] = value;
+					Vram[addr + 1] = value;
 				}
 				break;
 			case 0x7: break;
@@ -385,7 +402,12 @@ public class MemoryBus
 	public void Write16( uint address, ushort value )
 	{
 		int region = (int)(address >> 24);
-		if ( region >= 0xE ) { Gba.Save.Write8( address, (byte)value ); return; }
+		if ( region >= 0xE )
+		{
+			byte b = (address & 1) != 0 ? (byte)(value >> 8) : (byte)value;
+			Gba.Save.Write8( address, b );
+			return;
+		}
 
 		address &= ~1u;
 		switch ( region )
@@ -394,7 +416,14 @@ public class MemoryBus
 			case 0x3: WriteHalfToArray( Iwram, address & 0x7FFF, value ); break;
 			case 0x4: WriteIO16( address, value ); break;
 			case 0x5: WriteHalfToArray( PaletteRam, address & 0x3FF, value ); break;
-			case 0x6: WriteHalfToArray( Vram, MapVramAddress( address ), value ); break;
+			case 0x6:
+				{
+					uint rawAddr = address & 0x1FFFF;
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+						break;
+					WriteHalfToArray( Vram, MapVramAddress( address ), value );
+				}
+				break;
 			case 0x7: WriteHalfToArray( Oam, address & 0x3FF, value ); break;
 			case 0x8:
 			case 0x9:
@@ -414,7 +443,11 @@ public class MemoryBus
 	public void Write32( uint address, uint value )
 	{
 		int region = (int)(address >> 24);
-		if ( region >= 0xE ) { Gba.Save.Write8( address, (byte)value ); return; }
+		if ( region >= 0xE )
+		{
+			Gba.Save.Write8( address, (byte)(value >> (int)(8 * (address & 3))) );
+			return;
+		}
 
 		address &= ~3u;
 		switch ( region )
@@ -425,6 +458,9 @@ public class MemoryBus
 			case 0x5: WriteWordToArray( PaletteRam, address & 0x3FF, value ); break;
 			case 0x6:
 				{
+					uint rawAddr = address & 0x1FFFF;
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+						break;
 					WriteWordToArray( Vram, MapVramAddress( address ), value );
 				}
 				break;

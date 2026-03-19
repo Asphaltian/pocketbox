@@ -24,6 +24,7 @@ public class TimerController
 
 	public void WriteControl( int idx, ushort value )
 	{
+		value &= 0x00C7;
 		var c = Channels[idx];
 		bool wasEnabled = c.Enabled;
 		bool wasCountUp = c.CountUp;
@@ -180,7 +181,8 @@ public class TimerController
 					var next = Channels[i + 1];
 					if ( next.Enabled && next.CountUp )
 					{
-						IncrementCascade( i + 1, currentCycle );
+						int cascadeLate = (int)(currentCycle - overflowCycle);
+						IncrementCascade( i + 1, cascadeLate );
 					}
 				}
 			}
@@ -189,7 +191,7 @@ public class TimerController
 		RecalcGlobalEvent();
 	}
 
-	private void IncrementCascade( int idx, long currentCycle )
+	private void IncrementCascade( int idx, int late )
 	{
 		var c = Channels[idx];
 		c.Counter++;
@@ -199,7 +201,7 @@ public class TimerController
 
 			if ( c.IrqEnable )
 			{
-				Gba.Io.RaiseIrq( (IrqFlag)(1 << (3 + idx)), 0 );
+				Gba.Io.RaiseIrq( (IrqFlag)(1 << (3 + idx)), late );
 			}
 
 			if ( idx <= 1 )
@@ -212,7 +214,7 @@ public class TimerController
 				var next = Channels[idx + 1];
 				if ( next.Enabled && next.CountUp )
 				{
-					IncrementCascade( idx + 1, currentCycle );
+					IncrementCascade( idx + 1, late );
 				}
 			}
 		}

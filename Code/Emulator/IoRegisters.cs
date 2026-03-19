@@ -94,16 +94,18 @@ public class IoRegisters
 	{
 		if ( (KeyCnt & 0x4000) == 0 ) return;
 
+		ushort keysLast = _keysLast;
 		ushort pressed = (ushort)(~KeyInput & 0x3FF);
 		ushort mask = (ushort)(KeyCnt & 0x3FF);
 		bool isAnd = (KeyCnt & 0x8000) != 0;
+
+		_keysLast = pressed;
 
 		if ( isAnd )
 		{
 			if ( (pressed & mask) == mask )
 			{
-				if ( _keysLast == pressed ) return;
-				_keysLast = pressed;
+				if ( keysLast == pressed ) return;
 				RaiseIrq( IrqFlag.Keypad );
 			}
 			else
@@ -207,6 +209,7 @@ public class IoRegisters
 			case 0x122:
 			case 0x124:
 			case 0x126:
+				return 0;
 			case 0x128: return _sioCnt;
 			case 0x12A:
 			case 0x12C:
@@ -460,7 +463,7 @@ public class IoRegisters
 			case 0x12E:
 				break;
 			case 0x128:
-				_sioCnt = value;
+				_sioCnt = (ushort)(value & 0x7FFF);
 				if ( (value & 0x0080) != 0 )
 				{
 					_sioCnt &= unchecked((ushort)~0x0080);
@@ -471,12 +474,15 @@ public class IoRegisters
 
 			case 0x130: break;
 			case 0x132:
+				value &= 0xC3FF;
+				if ( _keysLast < 0x400 )
+					_keysLast &= (ushort)(KeyCnt | ~value);
 				KeyCnt = value;
 				CheckKeypadIrq();
 				break;
 
 			case 0x134:
-				Rcnt = (ushort)((Rcnt & 0x1FF) | (value & 0xC000));
+				Rcnt = (ushort)(value & 0xC1FF);
 				break;
 			case 0x136:
 			case 0x138:
@@ -495,8 +501,10 @@ public class IoRegisters
 			case 0x200: IE = value; CheckIrq( 1 ); break;
 			case 0x202:
 				IF &= (ushort)~value;
+				CheckIrq( 1 );
 				break;
 			case 0x204:
+				value &= 0x5FFF;
 				WaitCnt = value;
 				Gba.Bus.UpdateWaitstates( value );
 				break;

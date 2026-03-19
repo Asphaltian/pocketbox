@@ -32,6 +32,7 @@ public partial class Ppu
 	internal int _firstAffine = -1;
 	internal int _lastDrawnY = -1;
 	internal int[] _enabledAtY = [int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue];
+	internal bool[] _wasFullyEnabled = new bool[4];
 	internal uint[] _oldCharBase = new uint[2];
 	internal int[] _oldCharBaseFirstY = new int[2];
 
@@ -61,12 +62,14 @@ public partial class Ppu
 		_firstAffine = -1;
 		_lastDrawnY = -1;
 		for ( int i = 0; i < 4; i++ ) _enabledAtY[i] = int.MaxValue;
+		Array.Clear( _wasFullyEnabled );
 		_oldCharBase[0] = 0; _oldCharBase[1] = 0;
 		_oldCharBaseFirstY[0] = 0; _oldCharBaseFirstY[1] = 0;
 	}
 
 	public void WriteDispCnt( ushort value )
 	{
+		value &= 0xFFF7;
 		ushort oldVal = DispCnt;
 		DispCnt = value;
 
@@ -77,6 +80,8 @@ public partial class Ppu
 
 			if ( !isEnabled )
 			{
+				if ( _enabledAtY[i] < int.MaxValue )
+					_wasFullyEnabled[i] = _lastDrawnY >= 0 && _enabledAtY[i] <= _lastDrawnY;
 				_enabledAtY[i] = int.MaxValue;
 			}
 			else if ( _enabledAtY[i] == int.MaxValue && isEnabled )
@@ -85,11 +90,16 @@ public partial class Ppu
 				{
 					_enabledAtY[i] = 0;
 				}
+				else if ( _wasFullyEnabled[i] )
+				{
+					_enabledAtY[i] = 0;
+				}
 				else
 				{
 					int mode = value & 7;
-					_enabledAtY[i] = mode > 2 ? _lastDrawnY + 2 : _lastDrawnY + 3;
+					_enabledAtY[i] = mode > 2 ? _lastDrawnY + 3 : _lastDrawnY + 4;
 				}
+				_wasFullyEnabled[i] = false;
 			}
 		}
 	}

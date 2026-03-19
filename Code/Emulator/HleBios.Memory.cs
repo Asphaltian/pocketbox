@@ -171,39 +171,56 @@ public partial class HleBios
 		ushort srcLen = Gba.Bus.Read16( info );
 		byte srcBpp = Gba.Bus.Read8( info + 2 );
 		byte dstBpp = Gba.Bus.Read8( info + 3 );
+
+		switch ( srcBpp )
+		{
+			case 1: case 2: case 4: case 8: break;
+			default: return;
+		}
+		switch ( dstBpp )
+		{
+			case 1: case 2: case 4: case 8: case 16: case 32: break;
+			default: return;
+		}
+
 		uint dataOffset = Gba.Bus.Read32( info + 4 );
 		bool zeroFlag = (dataOffset & 0x80000000) != 0;
 		dataOffset &= 0x7FFFFFFF;
 
 		int srcMask = (1 << srcBpp) - 1;
-		int buffer = 0;
+		uint buffer = 0;
 		int bitsInBuffer = 0;
+		int bitsRemaining = 0;
+		byte inByte = 0;
 
-		for ( int i = 0; i < srcLen; i++ )
+		while ( srcLen > 0 || bitsRemaining > 0 )
 		{
-			byte srcByte = Gba.Bus.Read8( src++ );
-			for ( int bit = 0; bit < 8; bit += srcBpp )
+			if ( bitsRemaining == 0 )
 			{
-				int val = (srcByte >> bit) & srcMask;
-				if ( val != 0 || zeroFlag )
-					val += (int)dataOffset;
+				inByte = Gba.Bus.Read8( src++ );
+				bitsRemaining = 8;
+				srcLen--;
+			}
 
-				buffer |= val << bitsInBuffer;
-				bitsInBuffer += dstBpp;
+			int val = inByte & srcMask;
+			inByte >>= srcBpp;
+			if ( val != 0 || zeroFlag )
+				val += (int)dataOffset;
+			bitsRemaining -= srcBpp;
 
-				if ( bitsInBuffer >= 32 )
-				{
-					Gba.Bus.Write32( dst, (uint)buffer );
-					dst += 4;
-					buffer = 0;
-					bitsInBuffer = 0;
-				}
+			buffer |= (uint)val << bitsInBuffer;
+			bitsInBuffer += dstBpp;
+
+			if ( bitsInBuffer == 32 )
+			{
+				Gba.Bus.Write32( dst, buffer );
+				dst += 4;
+				buffer = 0;
+				bitsInBuffer = 0;
 			}
 		}
 
-		if ( bitsInBuffer > 0 )
-		{
-			Gba.Bus.Write32( dst, (uint)buffer );
-		}
+		Gba.Cpu.Registers[0] = src;
+		Gba.Cpu.Registers[1] = dst;
 	}
 }

@@ -80,36 +80,25 @@ public partial class HleBios
 			}
 		}
 
-		if ( vram && (dst & 1) != 0 )
-		{
-			Gba.Bus.Write16( dst & ~1u, (ushort)(halfword | (halfword << 8)) );
-		}
-	}
-
-	private void WriteVramByte( ref uint dst, byte val, ref byte buffer, ref bool hasBuffered )
-	{
-		if ( !hasBuffered )
-		{
-			buffer = val;
-			hasBuffered = true;
-		}
-		else
-		{
-			ushort halfword = (ushort)(buffer | (val << 8));
-			Gba.Bus.Write16( dst & ~1u, halfword );
-			dst += 2;
-			hasBuffered = false;
-		}
+		Gba.Cpu.Registers[0] = src;
+		Gba.Cpu.Registers[1] = dst;
+		Gba.Cpu.Registers[3] = 0;
 	}
 
 	private void HuffUnComp()
 	{
-		uint src = Gba.Cpu.Registers[0];
+		uint src = Gba.Cpu.Registers[0] & 0xFFFFFFFC;
 		uint dst = Gba.Cpu.Registers[1];
 
 		uint header = Gba.Bus.Read32( src );
 		int bitSize = (int)(header & 0xF);
 		int decompSize = (int)(header >> 8);
+
+		if ( bitSize == 0 )
+			bitSize = 8;
+		if ( 32 % bitSize != 0 || bitSize == 1 )
+			return;
+
 		src += 4;
 
 		uint treeSize = Gba.Bus.Read8( src ) * 2u + 1;
@@ -147,7 +136,7 @@ public partial class HleBios
 			if ( endFlag != 0 )
 			{
 				byte data = Gba.Bus.Read8( childOffset );
-				outBuffer |= (uint)data << outBits;
+				outBuffer |= (uint)(data & ((1 << bitSize) - 1)) << outBits;
 				outBits += bitSize;
 
 				if ( outBits >= 32 )
@@ -166,6 +155,9 @@ public partial class HleBios
 				treeNode = childOffset;
 			}
 		}
+
+		Gba.Cpu.Registers[0] = src;
+		Gba.Cpu.Registers[1] = dst;
 	}
 
 	private void RLUnCompWram() { RLDecompress( false ); }
@@ -176,49 +168,144 @@ public partial class HleBios
 		uint src = Gba.Cpu.Registers[0];
 		uint dst = Gba.Cpu.Registers[1];
 
-		uint header = Gba.Bus.Read32( src );
+		uint header = Gba.Bus.Read32( src & 0xFFFFFFFC );
 		src += 4;
-		int decompSize = (int)(header >> 8);
+		int remaining = (int)(header >> 8);
+		int padding = (4 - remaining) & 0x3;
 
-		int written = 0;
-		byte halfwordBuffer = 0;
-		bool hasBufferedByte = false;
+		int halfword = 0;
 
-		while ( written < decompSize )
+		while ( remaining > 0 )
 		{
 			byte flag = Gba.Bus.Read8( src++ );
 			if ( (flag & 0x80) != 0 )
 			{
 				int length = (flag & 0x7F) + 3;
 				byte data = Gba.Bus.Read8( src++ );
-				for ( int i = 0; i < length && written < decompSize; i++ )
+				for ( int i = 0; i < length && remaining > 0; i++ )
 				{
+					remaining--;
 					if ( vram )
-						WriteVramByte( ref dst, data, ref halfwordBuffer, ref hasBufferedByte );
+					{
+						if ( (dst & 1) != 0 )
+						{
+							halfword |= data << 8;
+							Gba.Bus.Write16( dst ^ 1, (ushort)halfword );
+						}
+						else
+						{
+							halfword = data;
+						}
+					}
 					else
-						Gba.Bus.Write8( dst++, data );
-					written++;
+					{
+						Gba.Bus.Write8( dst, data );
+					}
+					dst++;
 				}
 			}
 			else
 			{
 				int length = (flag & 0x7F) + 1;
-				for ( int i = 0; i < length && written < decompSize; i++ )
+				for ( int i = 0; i < length && remaining > 0; i++ )
 				{
 					byte data = Gba.Bus.Read8( src++ );
+					remaining--;
 					if ( vram )
-						WriteVramByte( ref dst, data, ref halfwordBuffer, ref hasBufferedByte );
+					{
+						if ( (dst & 1) != 0 )
+						{
+							halfword |= data << 8;
+							Gba.Bus.Write16( dst ^ 1, (ushort)halfword );
+						}
+						else
+						{
+							halfword = data;
+						}
+					}
 					else
-						Gba.Bus.Write8( dst++, data );
-					written++;
+					{
+						Gba.Bus.Write8( dst, data );
+					}
+					dst++;
 				}
 			}
 		}
 
-		if ( vram && hasBufferedByte )
+		if ( vram )
 		{
-			Gba.Bus.Write16( dst & ~1u, (ushort)(halfwordBuffer | (halfwordBuffer << 8)) );
+			if ( (dst & 1) != 0 )
+			{
+				padding--;
+				dst++;
+			}
+			for ( ; padding > 0; padding -= 2, dst += 2 )
+				Gba.Bus.Write16( dst, 0 );
 		}
+		else
+		{
+			for ( ; padding > 0; padding-- )
+				Gba.Bus.Write8( dst++, 0 );
+		}
+
+		Gba.Cpu.Registers[0] = src;
+		Gba.Cpu.Registers[1] = dst;
+	}
+
+	private void DiffUnFilterWram() { DiffUnFilter( 1, 1 ); }
+	private void DiffUnFilterVram() { DiffUnFilter( 1, 2 ); }
+	private void DiffUnFilter16() { DiffUnFilter( 2, 2 ); }
+
+	private void DiffUnFilter( int inWidth, int outWidth )
+	{
+		uint src = Gba.Cpu.Registers[0] & 0xFFFFFFFC;
+		uint dst = Gba.Cpu.Registers[1];
+
+		uint header = Gba.Bus.Read32( src );
+		int remaining = (int)(header >> 8);
+		ushort halfword = 0;
+		ushort old = 0;
+		src += 4;
+
+		while ( remaining > 0 )
+		{
+			ushort next;
+			if ( inWidth == 1 )
+				next = Gba.Bus.Read8( src );
+			else
+				next = Gba.Bus.Read16( src );
+			next = (ushort)(next + old);
+
+			if ( outWidth > inWidth )
+			{
+				halfword >>= 8;
+				halfword |= (ushort)(next << 8);
+				if ( (src & 1) != 0 )
+				{
+					Gba.Bus.Write16( dst, halfword );
+					dst += (uint)outWidth;
+					remaining -= outWidth;
+				}
+			}
+			else if ( outWidth == 1 )
+			{
+				Gba.Bus.Write8( dst, (byte)next );
+				dst += (uint)outWidth;
+				remaining -= outWidth;
+			}
+			else
+			{
+				Gba.Bus.Write16( dst, next );
+				dst += (uint)outWidth;
+				remaining -= outWidth;
+			}
+
+			old = next;
+			src += (uint)inWidth;
+		}
+
+		Gba.Cpu.Registers[0] = src;
+		Gba.Cpu.Registers[1] = dst;
 	}
 
 	private void SoundDriverMain() { }

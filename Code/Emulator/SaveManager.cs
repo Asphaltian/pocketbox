@@ -84,7 +84,7 @@ public class SaveManager
 			Data = [];
 		}
 
-		if ( Type == SaveType.Flash64K || Type == SaveType.Flash128K || Type == SaveType.Eeprom )
+		if ( Type == SaveType.Sram || Type == SaveType.Flash64K || Type == SaveType.Flash128K || Type == SaveType.Eeprom )
 		{
 			Array.Fill( Data, (byte)0xFF );
 		}
@@ -297,7 +297,7 @@ public class SaveManager
 					uint realOffset = (uint)(_flashBank * 0x10000) + offset;
 					if ( realOffset < (uint)Data.Length )
 					{
-						Data[realOffset] &= value;
+						Data[realOffset] = value;
 						MarkDirty();
 					}
 				}
