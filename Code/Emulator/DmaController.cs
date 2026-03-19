@@ -314,7 +314,7 @@ public class DmaController
 		}
 		else if ( ((ch.Control >> 5) & 3) == 3 )
 		{
-			ch.NextDest = ch.Destination & DstMask[number] & ~(width - 1);
+			ch.NextDest = ch.Destination & DstMask[number];
 		}
 
 		if ( (ch.Control & 0x4000) != 0 )

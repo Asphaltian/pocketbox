@@ -249,6 +249,7 @@ public partial class Arm7Cpu
 		FlagZ = (cpsr & 0x40000000) != 0;
 		FlagC = (cpsr & 0x20000000) != 0;
 		FlagV = (cpsr & 0x10000000) != 0;
+		bool wasIrqDisabled = IrqDisable;
 		IrqDisable = (cpsr & 0x80) != 0;
 		FiqDisable = (cpsr & 0x40) != 0;
 		ThumbMode = (cpsr & 0x20) != 0;
@@ -256,6 +257,9 @@ public partial class Arm7Cpu
 		CpuMode newMode = (CpuMode)(cpsr & 0x1F);
 		if ( newMode != Mode && IsValidMode( newMode ) )
 			SwitchMode( newMode );
+
+		if ( wasIrqDisabled && !IrqDisable )
+			Gba.Io.CheckIrq();
 	}
 
 	private static bool IsValidMode( CpuMode mode )

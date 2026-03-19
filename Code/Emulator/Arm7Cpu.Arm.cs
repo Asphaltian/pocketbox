@@ -549,6 +549,11 @@ public partial class Arm7Cpu
 				R[rn] += 0x40;
 			else
 				R[rn] -= 0x40;
+
+			int dr0 = (int)((R[rn] >> 24) & 0xF);
+			Cycles += Bus.WaitstatesNonseq32[dr0] + (isLoad ? 3 : 2);
+			int cr0 = (int)((R[15] >> 24) & 0xF);
+			Cycles += Bus.WaitstatesNonseq32[cr0] - Bus.WaitstatesSeq32[cr0];
 			return;
 		}
 

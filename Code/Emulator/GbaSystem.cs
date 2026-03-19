@@ -134,6 +134,7 @@ public class GbaSystem
 		while ( Cpu.Cycles < target && Cpu.Halted )
 		{
 			long nextEvent = Timers.NextGlobalEvent;
+			nextEvent = Math.Min( nextEvent, Io.NextIrqEvent );
 			if ( Dma.ActiveDma >= 0 )
 				nextEvent = Math.Min( nextEvent, Dma.Channels[Dma.ActiveDma].When );
 			nextEvent = Math.Min( nextEvent, target );
@@ -162,9 +163,7 @@ public class GbaSystem
 		if ( (Cpu.IntrWaitFlags & (ushort)irq) != 0 )
 		{
 			Cpu.InIntrWait = false;
-			Cpu.Halted = false;
 			Io.IME = 1;
-			Io.CheckIrq();
 		}
 	}
 

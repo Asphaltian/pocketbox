@@ -57,27 +57,15 @@ public class IoRegisters
 			Gba.Bus.Write16( 0x03007FF8, biosIF );
 		}
 
-		bool wasInIntrWait = Gba.Cpu.InIntrWait;
 		Gba.CheckIntrWait( irq );
 
-		if ( (IE & IF) != 0 )
+		if ( (IE & IF) != 0 && _irqFireCycle == long.MaxValue )
 		{
-			Gba.Cpu.Halted = false;
-
-			if ( wasInIntrWait )
-			{
-				if ( IME != 0 )
-				{
-					Gba.Cpu.IrqPending = true;
-					_irqFireCycle = long.MaxValue;
-				}
-			}
-			else if ( _irqFireCycle == long.MaxValue )
-			{
-				_irqFireCycle = Gba.Cpu.Cycles - cyclesLate + IrqDelayBase;
-			}
+			_irqFireCycle = Gba.Cpu.Cycles - cyclesLate + IrqDelayBase;
 		}
 	}
+
+	public long NextIrqEvent => _irqFireCycle;
 
 	public void TickIrqDelay( int cycles )
 	{
@@ -86,23 +74,19 @@ public class IoRegisters
 		if ( Gba.Cpu.Cycles >= _irqFireCycle )
 		{
 			_irqFireCycle = long.MaxValue;
-			if ( IME != 0 && (IE & IF) != 0 )
+			Gba.Cpu.Halted = false;
+			if ( IME != 0 && (IE & IF) != 0 && !Gba.Cpu.IrqDisable )
 			{
 				Gba.Cpu.IrqPending = true;
 			}
 		}
 	}
 
-	public void CheckIrq()
+	public void CheckIrq( int cyclesLate = 0 )
 	{
-		if ( (IE & IF) != 0 )
+		if ( (IE & IF) != 0 && _irqFireCycle == long.MaxValue )
 		{
-			Gba.Cpu.Halted = false;
-
-			if ( _irqFireCycle == long.MaxValue )
-			{
-				_irqFireCycle = Gba.Cpu.Cycles + IrqDelayBase;
-			}
+			_irqFireCycle = Gba.Cpu.Cycles - cyclesLate + IrqDelayBase;
 		}
 	}
 
@@ -508,7 +492,7 @@ public class IoRegisters
 			case 0x158:
 				break;
 
-			case 0x200: IE = value; CheckIrq(); break;
+			case 0x200: IE = value; CheckIrq( 1 ); break;
 			case 0x202:
 				IF &= (ushort)~value;
 				break;
@@ -516,7 +500,7 @@ public class IoRegisters
 				WaitCnt = value;
 				Gba.Bus.UpdateWaitstates( value );
 				break;
-			case 0x208: IME = (ushort)(value & 1); CheckIrq(); break;
+			case 0x208: IME = (ushort)(value & 1); CheckIrq( 1 ); break;
 			case 0x300: PostBoot = (byte)value; break;
 		}
 	}

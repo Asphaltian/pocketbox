@@ -266,6 +266,7 @@ public partial class Apu
 			}
 			else
 			{
+				fifo.Sample = 0;
 				return;
 			}
 		}

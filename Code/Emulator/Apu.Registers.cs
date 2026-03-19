@@ -475,7 +475,6 @@ public partial class Apu
 			}
 
 			_ch3Window = 0;
-			_ch3Sample = 0;
 
 			if ( _ch3Playing )
 			{

@@ -4,7 +4,7 @@ public partial class Apu
 {
 	private void RunPsg( long targetCycles )
 	{
-		if ( _ch1Playing && _ch1EnvDead != 2 )
+		if ( _ch1Playing )
 		{
 			int period = 4 * (2048 - _ch1Frequency) * TimingFactor;
 			if ( period > 0 )
@@ -20,7 +20,7 @@ public partial class Apu
 			}
 		}
 
-		if ( _ch2Playing && _ch2EnvDead != 2 )
+		if ( _ch2Playing )
 		{
 			int period = 4 * (2048 - _ch2Frequency) * TimingFactor;
 			if ( period > 0 )
