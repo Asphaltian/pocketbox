@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Runtime.CompilerServices;
 
 namespace sGBA;
 
@@ -43,11 +44,12 @@ public partial class Arm7Cpu
 	private bool _pipelineFlushed = true;
 
 	public GbaSystem Gba { get; }
-	private MemoryBus Bus => Gba.Bus;
+	private readonly MemoryBus Bus;
 
 	public Arm7Cpu( GbaSystem gba )
 	{
 		Gba = gba;
+		Bus = gba.Bus;
 		for ( int i = 0; i < 6; i++ )
 			_bankedRegs[i] = new uint[2];
 	}
@@ -92,82 +94,77 @@ public partial class Arm7Cpu
 
 	public void Run( long targetCycles )
 	{
+		if ( CrashDetected )
+		{
+			Cycles = targetCycles;
+			return;
+		}
+
+		if ( Halted )
+			return;
+
+		var timers = Gba.Timers;
+		var apu = Gba.Apu;
+		var io = Gba.Io;
+		var dma = Gba.Dma;
+
 		while ( Cycles < targetCycles )
 		{
-			if ( CrashDetected )
+			long cyclesBefore = Cycles;
+
+			if ( _pipelineFlushed )
 			{
+				FlushPipeline();
+				_pipelineFlushed = false;
+			}
+
+			if ( IrqPending && !IrqDisable )
+			{
+				RaiseIrq();
+				IrqPending = false;
+				FlushPipeline();
+				_pipelineFlushed = false;
+			}
+
+			if ( InIntrWait && !Halted && !IrqDisable && !InIrqContext )
+			{
+				Halted = true;
+				return;
+			}
+
+			uint instrAddr = ThumbMode ? R[15] - 4 : R[15] - 8;
+
+			if ( !IsExecutableAddress( instrAddr ) )
+			{
+				if ( !CrashDetected )
+				{
+					CrashDetected = true;
+					CrashPc = instrAddr;
+					CrashCpsr = GetCpsrRaw();
+					CrashRegs = new uint[16];
+					Array.Copy( R, CrashRegs, 16 );
+					CrashThumb = ThumbMode;
+				}
 				Cycles = targetCycles;
 				return;
 			}
 
-			if ( Halted )
+			if ( ThumbMode )
+				ExecuteThumb();
+			else
+				ExecuteArm();
+
+			int delta = (int)(Cycles - cyclesBefore);
+			timers.Tick( delta );
+			apu.Tick( delta );
+			io.TickIrqDelay( delta );
+
+			if ( Halted || CrashDetected )
 				return;
 
-			if ( Gba.Dma.ActiveDma >= 0 && Gba.Dma.Channels[Gba.Dma.ActiveDma].When <= Cycles )
+			if ( dma.ActiveDma >= 0 )
 				return;
-
-			Step();
 		}
-	}
-
-	private void Step()
-	{
-		long cyclesBefore = Cycles;
-
-		if ( _pipelineFlushed )
-		{
-			FlushPipeline();
-			_pipelineFlushed = false;
-		}
-
-		if ( IrqPending && !IrqDisable )
-		{
-			RaiseIrq();
-			IrqPending = false;
-			FlushPipeline();
-			_pipelineFlushed = false;
-		}
-
-		if ( InIntrWait && !Halted && !IrqDisable && !InIrqContext )
-		{
-			Halted = true;
-			return;
-		}
-
-		uint instrAddr = ThumbMode ? R[15] - 4 : R[15] - 8;
-
-		if ( !IsExecutableAddress( instrAddr ) )
-		{
-			if ( !CrashDetected )
-			{
-				CrashDetected = true;
-				CrashPc = instrAddr;
-				CrashCpsr = GetCpsrRaw();
-				CrashRegs = new uint[16];
-				Array.Copy( R, CrashRegs, 16 );
-				CrashThumb = ThumbMode;
-			}
-			return;
-		}
-
-		PcTrace[PcTraceIndex * 2] = instrAddr;
-		PcTrace[PcTraceIndex * 2 + 1] = _pipeline0;
-		PcTraceThumb[PcTraceIndex] = ThumbMode;
-		PcTraceIndex = (PcTraceIndex + 1) & 63;
-
-		if ( ThumbMode )
-		{
-			ExecuteThumb();
-		}
-		else
-		{
-			ExecuteArm();
-		}
-
-		int delta = (int)(Cycles - cyclesBefore);
-		Gba.Timers.Tick( delta );
-		Gba.Apu.Tick( delta );
-		Gba.Io.TickIrqDelay( delta );
 	}
 
 	private static bool IsExecutableAddress( uint addr )

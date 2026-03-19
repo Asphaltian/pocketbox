@@ -296,7 +296,7 @@ public class IoRegisters
 	{
 		switch ( offset )
 		{
-			case 0x000: Gba.Ppu.DispCnt = value; break;
+			case 0x000: Gba.Ppu.WriteDispCnt( value ); break;
 			case 0x004:
 				{
 					ushort dispstat = (ushort)((Gba.Ppu.DispStat & 0x7) | (value & 0xFFF8));
@@ -315,10 +315,10 @@ public class IoRegisters
 					break;
 				}
 			case 0x006: break;
-			case 0x008: Gba.Ppu.BgCnt[0] = value; break;
-			case 0x00A: Gba.Ppu.BgCnt[1] = value; break;
-			case 0x00C: Gba.Ppu.BgCnt[2] = value; break;
-			case 0x00E: Gba.Ppu.BgCnt[3] = value; break;
+			case 0x008: Gba.Ppu.WriteBgCnt( 0, value ); break;
+			case 0x00A: Gba.Ppu.WriteBgCnt( 1, value ); break;
+			case 0x00C: Gba.Ppu.WriteBgCnt( 2, value ); break;
+			case 0x00E: Gba.Ppu.WriteBgCnt( 3, value ); break;
 
 			case 0x010: Gba.Ppu.BgHOfs[0] = (short)(value & 0x1FF); break;
 			case 0x012: Gba.Ppu.BgVOfs[0] = (short)(value & 0x1FF); break;

@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-
 namespace sGBA;
 
 public class MemoryBus
@@ -592,21 +590,25 @@ public class MemoryBus
 
 	private static ushort ReadHalfFromArray( byte[] arr, uint offset )
 	{
-		return BinaryPrimitives.ReadUInt16LittleEndian( arr.AsSpan( (int)offset ) );
+		return (ushort)(arr[offset] | (arr[offset + 1] << 8));
 	}
 
 	private static uint ReadWordFromArray( byte[] arr, uint offset )
 	{
-		return BinaryPrimitives.ReadUInt32LittleEndian( arr.AsSpan( (int)offset ) );
+		return (uint)(arr[offset] | (arr[offset + 1] << 8) | (arr[offset + 2] << 16) | (arr[offset + 3] << 24));
 	}
 
 	private static void WriteHalfToArray( byte[] arr, uint offset, ushort value )
 	{
-		BinaryPrimitives.WriteUInt16LittleEndian( arr.AsSpan( (int)offset ), value );
+		arr[offset] = (byte)value;
+		arr[offset + 1] = (byte)(value >> 8);
 	}
 
 	private static void WriteWordToArray( byte[] arr, uint offset, uint value )
 	{
-		BinaryPrimitives.WriteUInt32LittleEndian( arr.AsSpan( (int)offset ), value );
+		arr[offset] = (byte)value;
+		arr[offset + 1] = (byte)(value >> 8);
+		arr[offset + 2] = (byte)(value >> 16);
+		arr[offset + 3] = (byte)(value >> 24);
 	}
 }

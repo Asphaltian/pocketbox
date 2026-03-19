@@ -363,7 +363,7 @@ public partial class Apu
 					_ch1Length--;
 			}
 
-			_ch1Sample = DutyTable[_ch1Duty][_ch1DutyIndex] * _ch1EnvVolume;
+			_ch1Sample = DutyTable[_ch1Duty * 8 + _ch1DutyIndex] * _ch1EnvVolume;
 			_ch1LastUpdate = _totalCycles;
 		}
 	}
@@ -424,7 +424,7 @@ public partial class Apu
 					_ch2Length--;
 			}
 
-			_ch2Sample = DutyTable[_ch2Duty][_ch2DutyIndex] * _ch2EnvVolume;
+			_ch2Sample = DutyTable[_ch2Duty * 8 + _ch2DutyIndex] * _ch2EnvVolume;
 			_ch2LastUpdate = _totalCycles;
 		}
 	}

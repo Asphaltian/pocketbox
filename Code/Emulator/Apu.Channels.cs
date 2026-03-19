@@ -15,7 +15,7 @@ public partial class Apu
 					int steps = (int)(diff / period);
 					_ch1DutyIndex = (_ch1DutyIndex + steps) & 7;
 					_ch1LastUpdate += steps * period;
-					_ch1Sample = DutyTable[_ch1Duty][_ch1DutyIndex] * _ch1EnvVolume;
+					_ch1Sample = DutyTable[_ch1Duty * 8 + _ch1DutyIndex] * _ch1EnvVolume;
 				}
 			}
 		}
@@ -31,7 +31,7 @@ public partial class Apu
 					int steps = (int)(diff / period);
 					_ch2DutyIndex = (_ch2DutyIndex + steps) & 7;
 					_ch2LastUpdate += steps * period;
-					_ch2Sample = DutyTable[_ch2Duty][_ch2DutyIndex] * _ch2EnvVolume;
+					_ch2Sample = DutyTable[_ch2Duty * 8 + _ch2DutyIndex] * _ch2EnvVolume;
 				}
 			}
 		}
@@ -188,14 +188,14 @@ public partial class Apu
 		{
 			TickEnvelope( ref _ch1EnvVolume, ref _ch1EnvStepTime,
 			ref _ch1EnvDirection, ref _ch1EnvDead, ref _ch1EnvNextStep );
-			_ch1Sample = DutyTable[_ch1Duty][_ch1DutyIndex] * _ch1EnvVolume;
+			_ch1Sample = DutyTable[_ch1Duty * 8 + _ch1DutyIndex] * _ch1EnvVolume;
 		}
 
 		if ( _ch2Playing && _ch2EnvDead == 0 )
 		{
 			TickEnvelope( ref _ch2EnvVolume, ref _ch2EnvStepTime,
 			ref _ch2EnvDirection, ref _ch2EnvDead, ref _ch2EnvNextStep );
-			_ch2Sample = DutyTable[_ch2Duty][_ch2DutyIndex] * _ch2EnvVolume;
+			_ch2Sample = DutyTable[_ch2Duty * 8 + _ch2DutyIndex] * _ch2EnvVolume;
 		}
 
 		if ( _ch4Playing && _ch4EnvDead == 0 )

@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Runtime.CompilerServices;
 
 namespace sGBA;
 
@@ -129,12 +130,12 @@ public partial class Apu
 	private int _ch4EnvDead;
 	private int _ch4EnvNextStep;
 
-	private static readonly int[][] DutyTable =
+	private static readonly int[] DutyTable =
 	[
-		[0, 0, 0, 0, 0, 0, 0, 1],
-		[1, 0, 0, 0, 0, 0, 0, 1],
-		[1, 0, 0, 0, 0, 1, 1, 1],
-		[0, 1, 1, 1, 1, 1, 1, 0],
+		0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 1, 1, 1,
+		0, 1, 1, 1, 1, 1, 1, 0,
 	];
 
 	public Apu( GbaSystem gba )

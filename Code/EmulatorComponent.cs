@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Sandbox.Rendering;
 
 namespace sGBA;
 
@@ -18,24 +19,22 @@ public sealed partial class EmulatorComponent : Component
 	private SoundStream _audioStream;
 	private SoundHandle _soundHandle;
 	private string _savePath;
+	private CameraComponent _camera;
 
 	private CancellationTokenSource _cts;
 	private Channel<FramePacket> _frameChannel;
 	private SemaphoreSlim _frameSemaphore;
 	private int _inputKeys = 0x03FF;
-	private byte[][] _pixBufs;
 	private short[][] _audBufs;
 	private int _workerBufIdx;
 	private double _frameDebt;
 
 	private bool _paused;
 	private int _inputCooldown;
-	private byte[] _lastFramePixels;
 	private string _stateBasePath;
 
-	private readonly struct FramePacket( byte[] p, short[] a, int ac, byte[] s )
+	private readonly struct FramePacket( short[] a, int ac, byte[] s )
 	{
-		public readonly byte[] Pixels = p;
 		public readonly short[] Audio = a;
 		public readonly int AudioSamples = ac;
 		public readonly byte[] SaveData = s;
@@ -44,11 +43,6 @@ public sealed partial class EmulatorComponent : Component
 	protected override void OnStart()
 	{
 		Current = this;
-
-		ScreenTexture = Texture.Create( GbaConstants.ScreenWidth, GbaConstants.ScreenHeight, ImageFormat.RGBA8888 )
-			.WithDynamicUsage()
-			.WithName( "gba-screen" )
-			.Finish();
 
 		try
 		{
@@ -80,20 +74,22 @@ public sealed partial class EmulatorComponent : Component
 			Core.Reset();
 			IsReady = true;
 
+			Core.Ppu.InitGpu( scale: ComputeAutoScale() );
+			ScreenTexture = Core.Ppu.OutputTexture;
+
+			_camera = Scene.Camera;
+			if ( _camera.IsValid() && Core.Ppu.RenderCommandList != null )
+				_camera.AddCommandList( Core.Ppu.RenderCommandList, Stage.AfterOpaque, 0 );
+
 			_stateBasePath = "states/" + System.IO.Path.GetFileNameWithoutExtension( RomPath );
 
 			try { InitAudioStream(); }
 			catch ( Exception audioEx ) { Log.Warning( $"Audio init failed: {audioEx.Message}" ); }
 
-			int pixSize = GbaConstants.ScreenWidth * GbaConstants.ScreenHeight * 4;
 			int audSize = Apu.SamplesPerFrame * 2;
-			_pixBufs = new byte[4][];
 			_audBufs = new short[4][];
 			for ( int i = 0; i < 4; i++ )
-			{
-				_pixBufs[i] = new byte[pixSize];
 				_audBufs[i] = new short[audSize];
-			}
 
 			_frameChannel = Channel.CreateBounded<FramePacket>( 2 );
 			_frameSemaphore = new SemaphoreSlim( 0, 4 );
@@ -130,6 +126,13 @@ public sealed partial class EmulatorComponent : Component
 		_soundHandle.Stop( float.MaxValue );
 	}
 
+	private static int ComputeAutoScale()
+	{
+		int sw = Screen.Width > 0 ? (int)Screen.Width : 1920;
+		int sh = Screen.Height > 0 ? (int)Screen.Height : 1080;
+		return Math.Clamp( Math.Min( sw / 240, sh / 160 ), 1, 8 );
+	}
+
 	private async Task EmulationLoop()
 	{
 		var token = _cts.Token;
@@ -150,10 +153,8 @@ public sealed partial class EmulatorComponent : Component
 
 				int idx = _workerBufIdx;
 				_workerBufIdx = (idx + 1) & 3;
-				var pix = _pixBufs[idx];
 				var aud = _audBufs[idx];
 
-				Buffer.BlockCopy( core.Ppu.FrameBuffer, 0, pix, 0, pix.Length );
 				int sampleCount = core.Apu.SamplesWritten;
 				if ( sampleCount > 0 )
 					Buffer.BlockCopy( core.Apu.OutputBuffer, 0, aud, 0, sampleCount * 2 * sizeof( short ) );
@@ -163,7 +164,7 @@ public sealed partial class EmulatorComponent : Component
 					saveData = core.Save.Data.ToArray();
 
 				await _frameChannel.Writer.WriteAsync(
-					new FramePacket( pix, aud, sampleCount, saveData ), token );
+					new FramePacket( aud, sampleCount, saveData ), token );
 			}
 		}
 		catch ( OperationCanceledException ) { }
@@ -202,7 +203,6 @@ public sealed partial class EmulatorComponent : Component
 			}
 		}
 
-		FramePacket lastFrame = default;
 		bool hasFrame = false;
 
 		while ( _frameChannel != null && _frameChannel.Reader.TryRead( out var frame ) )
@@ -216,18 +216,13 @@ public sealed partial class EmulatorComponent : Component
 			if ( frame.SaveData != null )
 				FileSystem.Data.WriteAllBytes( _savePath, frame.SaveData );
 
-			lastFrame = frame;
 			hasFrame = true;
 		}
 
 		if ( hasFrame )
-		{
-			_lastFramePixels ??= new byte[lastFrame.Pixels.Length];
-			Buffer.BlockCopy( lastFrame.Pixels, 0, _lastFramePixels, 0, lastFrame.Pixels.Length );
-
-			ScreenTexture.Update( new ReadOnlySpan<byte>( lastFrame.Pixels ),
-				0, 0, GbaConstants.ScreenWidth, GbaConstants.ScreenHeight );
-		}
+			Core?.Ppu?.UploadAndBuildCommandList();
+		else
+			Core?.Ppu?.RenderCommandList?.Reset();
 	}
 
 	private const float StickDeadzone = 0.3f;
@@ -294,7 +289,8 @@ public sealed partial class EmulatorComponent : Component
 		if ( Core == null ) return;
 		try
 		{
-			var data = SaveState.Save( Core, _lastFramePixels );
+			var screenshot = Core.Ppu.CaptureScreenshot();
+			var data = SaveState.Save( Core, screenshot );
 			var path = GetStatePath( slot );
 			FileSystem.Data.WriteAllBytes( path, data );
 			Log.Info( $"Suspend point created in slot {slot}" );
@@ -346,6 +342,12 @@ public sealed partial class EmulatorComponent : Component
 		_audioStream?.Dispose();
 		_audioStream = null;
 		_frameSemaphore?.Dispose();
+
+		if ( _camera.IsValid() && Core?.Ppu?.RenderCommandList != null )
+			_camera.RemoveCommandList( Core.Ppu.RenderCommandList );
+
+		Core?.Ppu?.DisposeGpu();
+		_camera = null;
 		Core = null;
 		ScreenTexture = null;
 	}

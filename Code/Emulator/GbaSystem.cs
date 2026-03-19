@@ -66,7 +66,6 @@ public class GbaSystem
 	{
 		if ( !IsRunning ) return;
 
-		Ppu.FrameReady = false;
 		Apu.BeginFrame();
 		Io.CheckKeypadIrq();
 

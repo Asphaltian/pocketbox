@@ -7,7 +7,7 @@ public static class SaveState
 	private const uint Magic = 0x53474241;
 	public const int SlotCount = 4;
 	public const int ScreenshotSize = GbaConstants.ScreenWidth * GbaConstants.ScreenHeight * 4;
-	private const int HeaderSize = sizeof( uint ) + sizeof( long );
+	private const int HeaderSize = sizeof( uint ) + sizeof( long ); // magic + timestamp
 
 	public static byte[] Save( GbaSystem gba, byte[] screenshot )
 	{
