@@ -412,7 +412,11 @@ public partial class Arm7Cpu
 					if ( (addr & 1) != 0 ) R[rd] = Ror( R[rd], 8 );
 				}
 				else
-					Bus.Write16( addr, (ushort)R[rd] );
+				{
+					uint val = R[rd];
+					if ( rd == 15 ) val += 4;
+					Bus.Write16( addr, (ushort)val );
+				}
 				break;
 			case 2:
 				if ( isLoad )

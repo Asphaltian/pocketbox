@@ -321,9 +321,16 @@ public class GpioController
 			return;
 
 		string gameCode = System.Text.Encoding.ASCII.GetString( rom, 0xAC, 4 );
-		if ( gameCode.StartsWith( "AXV", StringComparison.Ordinal ) ||
-			 gameCode.StartsWith( "AXP", StringComparison.Ordinal ) ||
-			 gameCode.StartsWith( "BPE", StringComparison.Ordinal ) )
+		if ( gameCode.StartsWith( "AXV", StringComparison.Ordinal ) || // Pokemon Ruby
+			 gameCode.StartsWith( "AXP", StringComparison.Ordinal ) || // Pokemon Sapphire
+			 gameCode.StartsWith( "BPE", StringComparison.Ordinal ) || // Pokemon Emerald
+			 gameCode.StartsWith( "BLJ", StringComparison.Ordinal ) || // Legendz - Yomigaeru Shiren no Shima
+			 gameCode.StartsWith( "BLV", StringComparison.Ordinal ) || // Legendz - Sign of Nekuromu
+			 gameCode.StartsWith( "BR4", StringComparison.Ordinal ) || // RockMan EXE 4.5
+			 gameCode.StartsWith( "BKA", StringComparison.Ordinal ) || // Sennen Kazoku
+			 gameCode.StartsWith( "U3I", StringComparison.Ordinal ) || // Boktai
+			 gameCode.StartsWith( "U32", StringComparison.Ordinal ) || // Boktai 2
+			 gameCode.StartsWith( "U33", StringComparison.Ordinal ) )  // Boktai 3
 		{
 			HasRtc = true;
 		}

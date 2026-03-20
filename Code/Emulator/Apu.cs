@@ -239,10 +239,10 @@ public partial class Apu
 	{
 		if ( !Enable ) return;
 
-		if ( (_chALeft || _chARight) && (_chATimer ? 1 : 0) == timer )
+		if ( (_chATimer ? 1 : 0) == timer )
 			SampleFifo( ref _fifoA, 1 );
 
-		if ( (_chBLeft || _chBRight) && (_chBTimer ? 1 : 0) == timer )
+		if ( (_chBTimer ? 1 : 0) == timer )
 			SampleFifo( ref _fifoB, 2 );
 	}
 

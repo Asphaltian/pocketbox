@@ -61,9 +61,8 @@ public partial class HleBios
 	private void SoftReset()
 	{
 		byte flag = Gba.Bus.Read8( 0x03007FFA );
-		uint clearAddr = flag != 0 ? 0x02000000u : 0x03007E00u;
 		for ( int i = 0; i < 0x200; i++ )
-			Gba.Bus.Write8( clearAddr + (uint)i, 0 );
+			Gba.Bus.Write8( 0x03007E00u + (uint)i, 0 );
 
 		for ( int i = 0; i < 13; i++ )
 			Gba.Cpu.Registers[i] = 0;

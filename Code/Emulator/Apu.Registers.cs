@@ -224,8 +224,6 @@ public partial class Apu
 					if ( (value & 8) != 0 )
 					{
 						_fifoA.Write = _fifoA.Read = 0;
-						_fifoA.Internal = 0;
-						_fifoA.Remaining = 0;
 					}
 					_chBRight = (value & 0x10) != 0;
 					_chBLeft = (value & 0x20) != 0;
@@ -233,8 +231,6 @@ public partial class Apu
 					if ( (value & 0x80) != 0 )
 					{
 						_fifoB.Write = _fifoB.Read = 0;
-						_fifoB.Internal = 0;
-						_fifoB.Remaining = 0;
 					}
 				}
 				break;
@@ -582,14 +578,10 @@ public partial class Apu
 		if ( (value & (1 << 11)) != 0 )
 		{
 			_fifoA.Write = _fifoA.Read = 0;
-			_fifoA.Internal = 0;
-			_fifoA.Remaining = 0;
 		}
 		if ( (value & (1 << 15)) != 0 )
 		{
 			_fifoB.Write = _fifoB.Read = 0;
-			_fifoB.Internal = 0;
-			_fifoB.Remaining = 0;
 		}
 	}
 
