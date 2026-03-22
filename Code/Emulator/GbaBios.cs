@@ -1,14 +1,14 @@
-﻿namespace sGBA;
+namespace sGBA;
 
-public partial class HleBios
+public partial class GbaBios
 {
-	public GbaSystem Gba { get; }
+	public Gba Gba { get; }
 
 	public bool HleActive;
 
 	public int BiosStall;
 
-	public HleBios( GbaSystem gba )
+	public GbaBios( Gba gba )
 	{
 		Gba = gba;
 	}
@@ -38,45 +38,48 @@ public partial class HleBios
 			case 0x10: BitUnPack(); break;
 			case 0x11: LZ77UnCompWram(); break;
 			case 0x12: LZ77UnCompVram(); break;
-			case 0x13: HuffUnComp(); break;
+			case 0x13: HuffmanUnComp(); break;
 			case 0x14: RLUnCompWram(); break;
 			case 0x15: RLUnCompVram(); break;
-			case 0x16: DiffUnFilterWram(); break;
-			case 0x17: DiffUnFilterVram(); break;
-			case 0x18: DiffUnFilter16(); break;
-			case 0x19: SoundDriverMain(); break;
-			case 0x1A: SoundDriverVSync(); break;
-			case 0x1B: SoundChannelClear(); break;
+			case 0x16: Diff8BitUnFilterWram(); break;
+			case 0x17: Diff8BitUnFilterVram(); break;
+			case 0x18: Diff16BitUnFilter(); break;
+			case 0x19: SoundBias(); break;
+			case 0x1A: SoundDriverInit(); break;
+			case 0x1B: SoundDriverMode(); break;
+			case 0x1C: SoundDriverMain(); break;
+			case 0x1D: SoundDriverVSync(); break;
+			case 0x1E: SoundChannelClear(); break;
 			case 0x1F: MidiKey2Freq(); break;
 			default:
 				break;
 		}
 		HleActive = false;
 
-		Gba.Bus.BiosPrefetch = 0xE3A02004;
+		Gba.Memory.BiosPrefetch = 0xE3A02004;
 
 		return true;
 	}
 
 	private void SoftReset()
 	{
-		byte flag = Gba.Bus.Read8( 0x03007FFA );
+		byte flag = Gba.Memory.Load8( 0x03007FFA );
 		for ( int i = 0; i < 0x200; i++ )
-			Gba.Bus.Write8( 0x03007E00u + (uint)i, 0 );
+			Gba.Memory.Store8( 0x03007E00u + (uint)i, 0 );
 
 		for ( int i = 0; i < 13; i++ )
 			Gba.Cpu.Registers[i] = 0;
 
-		Gba.Cpu.Registers[13] = GbaConstants.SpSys;
-		Gba.Cpu.SpsrBank[1] = 0;
-		Gba.Cpu.SpsrBank[2] = 0;
+		Gba.Cpu.Registers[13] = GbaConstants.SpBaseSystem;
+		Gba.Cpu.BankedSPSRs[1] = 0;
+		Gba.Cpu.BankedSPSRs[2] = 0;
 
-		Gba.Cpu.SwitchMode( CpuMode.IRQ );
-		Gba.Cpu.Registers[13] = GbaConstants.SpIrq;
-		Gba.Cpu.SwitchMode( CpuMode.Supervisor );
-		Gba.Cpu.Registers[13] = GbaConstants.SpSvc;
-		Gba.Cpu.SwitchMode( CpuMode.System );
-		Gba.Cpu.Registers[13] = GbaConstants.SpSys;
+		Gba.Cpu.SetPrivilegeMode( PrivilegeMode.IRQ );
+		Gba.Cpu.Registers[13] = GbaConstants.SpBaseIrq;
+		Gba.Cpu.SetPrivilegeMode( PrivilegeMode.Supervisor );
+		Gba.Cpu.Registers[13] = GbaConstants.SpBaseSupervisor;
+		Gba.Cpu.SetPrivilegeMode( PrivilegeMode.System );
+		Gba.Cpu.Registers[13] = GbaConstants.SpBaseSystem;
 
 		uint entry = flag != 0 ? 0x02000000u : 0x08000000u;
 		Gba.Cpu.Registers[15] = entry;
@@ -98,15 +101,15 @@ public partial class HleBios
 		io.Write16( 0x000, 0x0080 );
 
 		if ( (flags & 0x01) != 0 )
-			Gba.Bus.Ewram.AsSpan( 0, 0x40000 ).Clear();
+			Gba.Memory.Wram.AsSpan( 0, 0x40000 ).Clear();
 		if ( (flags & 0x02) != 0 )
-			Gba.Bus.Iwram.AsSpan( 0, 0x7E00 ).Clear();
+			Gba.Memory.Iwram.AsSpan( 0, 0x7E00 ).Clear();
 		if ( (flags & 0x04) != 0 )
-			Array.Clear( Gba.Bus.PaletteRam );
+			Array.Clear( Gba.Memory.PaletteRam );
 		if ( (flags & 0x08) != 0 )
-			Gba.Bus.Vram.AsSpan( 0, 0x18000 ).Clear();
+			Gba.Memory.Vram.AsSpan( 0, 0x18000 ).Clear();
 		if ( (flags & 0x10) != 0 )
-			Array.Clear( Gba.Bus.Oam );
+			Array.Clear( Gba.Memory.Oam );
 		if ( (flags & 0x20) != 0 )
 		{
 			io.Write16( 0x128, 0 );
@@ -120,7 +123,7 @@ public partial class HleBios
 		}
 		if ( (flags & 0x40) != 0 )
 		{
-			var apu = Gba.Apu;
+			var apu = Gba.Audio;
 			apu.WriteRegister( 0x60, 0 );
 			apu.WriteRegister( 0x62, 0 );
 			apu.WriteRegister( 0x64, 0 );
@@ -217,9 +220,9 @@ public partial class HleBios
 
 		if ( discardOld )
 		{
-			uint biosIF = Gba.Bus.Read16( 0x03007FF8 );
+			uint biosIF = Gba.Memory.Load16( 0x03007FF8 );
 			biosIF &= ~flags;
-			Gba.Bus.Write16( 0x03007FF8, (ushort)biosIF );
+			Gba.Memory.Store16( 0x03007FF8, (ushort)biosIF );
 		}
 
 		Gba.Cpu.Halted = true;

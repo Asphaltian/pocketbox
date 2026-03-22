@@ -1,19 +1,19 @@
 namespace sGBA;
 
-public partial class Arm7Cpu
+public partial class ArmCore
 {
 	private void ExecuteArm()
 	{
-		uint opcode = _pipeline0;
-		_pipeline0 = _pipeline1;
-		_pipeline1 = Bus.Read32( R[15] );
-		OpenBusPrefetch = _pipeline1;
-		Cycles += 1 + Bus.WaitstatesSeq32[(R[15] >> 24) & 0xF];
+		uint opcode = _prefetch0;
+		_prefetch0 = _prefetch1;
+		_prefetch1 = Memory.Load32( Gprs[15] );
+		OpenBusPrefetch = _prefetch1;
+		Cycles += 1 + Memory.WaitstatesSeq32[(Gprs[15] >> 24) & 0xF];
 
 		uint cond = opcode >> 28;
 		if ( cond != 0xE && !CheckCondition( cond ) )
 		{
-			R[15] += 4;
+			Gprs[15] += 4;
 			return;
 		}
 
@@ -78,8 +78,8 @@ public partial class Arm7Cpu
 				break;
 		}
 
-		if ( !_pipelineFlushed )
-			R[15] += 4;
+		if ( !_prefetchFlushed )
+			Gprs[15] += 4;
 	}
 
 	private void ArmDataProcessing( uint opcode )
@@ -89,7 +89,7 @@ public partial class Arm7Cpu
 		uint rn = (opcode >> 16) & 0xF;
 		uint rd = (opcode >> 12) & 0xF;
 
-		uint operand1 = R[rn];
+		uint operand1 = Gprs[rn];
 		bool isRegShift = ((opcode >> 25) & 1) == 0 && ((opcode >> 4) & 1) != 0;
 		if ( rn == 15 && isRegShift ) operand1 += 4;
 
@@ -195,7 +195,7 @@ public partial class Arm7Cpu
 
 		if ( writeDest )
 		{
-			R[rd] = result;
+			Gprs[rd] = result;
 			if ( rd == 15 )
 			{
 				if ( setFlags )
@@ -204,7 +204,7 @@ public partial class Arm7Cpu
 					SetCpsr( spsr );
 					InIrqContext = false;
 				}
-				_pipelineFlushed = true;
+				_prefetchFlushed = true;
 			}
 		}
 	}
@@ -212,7 +212,7 @@ public partial class Arm7Cpu
 	private uint GetShifterOperand( uint opcode, out bool carryOut )
 	{
 		uint rm = opcode & 0xF;
-		uint val = R[rm];
+		uint val = Gprs[rm];
 
 		uint shiftType = (opcode >> 5) & 3;
 		uint shiftAmount;
@@ -223,7 +223,7 @@ public partial class Arm7Cpu
 		if ( regShift )
 		{
 			uint rs = (opcode >> 8) & 0xF;
-			shiftAmount = R[rs] & 0xFF;
+			shiftAmount = Gprs[rs] & 0xFF;
 			Cycles += 1;
 
 			if ( shiftAmount == 0 )
@@ -297,11 +297,11 @@ public partial class Arm7Cpu
 		bool accumulate = ((opcode >> 21) & 1) != 0;
 		bool setFlags = ((opcode >> 20) & 1) != 0;
 
-		uint rsVal = R[rs];
-		uint result = R[rm] * rsVal;
-		if ( accumulate ) result += R[rn];
+		uint rsVal = Gprs[rs];
+		uint result = Gprs[rm] * rsVal;
+		if ( accumulate ) result += Gprs[rn];
 
-		R[rd] = result;
+		Gprs[rd] = result;
 
 		if ( setFlags )
 		{
@@ -310,9 +310,9 @@ public partial class Arm7Cpu
 		}
 
 		int mulWait = MultiplyExtraCycles( rsVal ) + (accumulate ? 1 : 0);
-		Cycles += Bus.MemoryStall( R[15], mulWait );
-		int mulCr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq32[mulCr] - Bus.WaitstatesSeq32[mulCr];
+		Cycles += Memory.MemoryStall( Gprs[15], mulWait );
+		int mulCr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq32[mulCr] - Memory.WaitstatesSeq32[mulCr];
 	}
 
 	private void ArmMultiplyLong( uint opcode )
@@ -327,30 +327,30 @@ public partial class Arm7Cpu
 
 		long result;
 		if ( isSigned )
-			result = (long)(int)R[rm] * (int)R[rs];
+			result = (long)(int)Gprs[rm] * (int)Gprs[rs];
 		else
-			result = (long)((ulong)R[rm] * R[rs]);
+			result = (long)((ulong)Gprs[rm] * Gprs[rs]);
 
 		if ( accumulate )
-			result += (long)(((ulong)R[rdHi] << 32) | R[rdLo]);
+			result += (long)(((ulong)Gprs[rdHi] << 32) | Gprs[rdLo]);
 
-		R[rdLo] = (uint)result;
-		R[rdHi] = (uint)(result >> 32);
+		Gprs[rdLo] = (uint)result;
+		Gprs[rdHi] = (uint)(result >> 32);
 
 		if ( setFlags )
 		{
-			FlagN = (R[rdHi] & 0x80000000) != 0;
+			FlagN = (Gprs[rdHi] & 0x80000000) != 0;
 			FlagZ = result == 0;
 		}
 
 		int longWait = accumulate ? 2 : 1;
 		if ( isSigned )
-			longWait += MultiplyExtraCycles( R[rs] );
+			longWait += MultiplyExtraCycles( Gprs[rs] );
 		else
-			longWait += MultiplyExtraCyclesUnsigned( R[rs] );
-		Cycles += Bus.MemoryStall( R[15], longWait );
-		int longMulCr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq32[longMulCr] - Bus.WaitstatesSeq32[longMulCr];
+			longWait += MultiplyExtraCyclesUnsigned( Gprs[rs] );
+		Cycles += Memory.MemoryStall( Gprs[15], longWait );
+		int longMulCr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq32[longMulCr] - Memory.WaitstatesSeq32[longMulCr];
 	}
 
 	private void ArmSwap( uint opcode )
@@ -360,25 +360,25 @@ public partial class Arm7Cpu
 		uint rm = opcode & 0xF;
 		bool byteSwap = ((opcode >> 22) & 1) != 0;
 
-		uint addr = R[rn];
+		uint addr = Gprs[rn];
 		if ( byteSwap )
 		{
-			byte tmp = Bus.Read8( addr );
-			Bus.Write8( addr, (byte)R[rm] );
-			R[rd] = tmp;
+			byte tmp = Memory.Load8( addr );
+			Memory.Store8( addr, (byte)Gprs[rm] );
+			Gprs[rd] = tmp;
 		}
 		else
 		{
 			uint tmp = ReadWordRotated( addr );
-			Bus.Write32( addr, R[rm] );
-			R[rd] = tmp;
+			Memory.Store32( addr, Gprs[rm] );
+			Gprs[rd] = tmp;
 		}
 
 		int dr = (int)((addr >> 24) & 0xF);
-		int wait = byteSwap ? Bus.WaitstatesNonseq16[dr] : Bus.WaitstatesNonseq32[dr];
+		int wait = byteSwap ? Memory.WaitstatesNonseq16[dr] : Memory.WaitstatesNonseq32[dr];
 		Cycles += wait * 2 + 3;
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq32[cr] - Bus.WaitstatesSeq32[cr];
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq32[cr] - Memory.WaitstatesSeq32[cr];
 	}
 
 	private void ArmHalfwordTransfer( uint opcode )
@@ -396,9 +396,9 @@ public partial class Arm7Cpu
 		if ( immediate )
 			offset = ((opcode >> 4) & 0xF0) | (opcode & 0xF);
 		else
-			offset = R[opcode & 0xF];
+			offset = Gprs[opcode & 0xF];
 
-		uint addr = R[rn];
+		uint addr = Gprs[rn];
 
 		if ( preIndex )
 			addr = addOffset ? addr + offset : addr - offset;
@@ -408,50 +408,50 @@ public partial class Arm7Cpu
 			case 1:
 				if ( isLoad )
 				{
-					R[rd] = Bus.Read16( addr );
-					if ( (addr & 1) != 0 ) R[rd] = Ror( R[rd], 8 );
+					Gprs[rd] = Memory.Load16( addr );
+					if ( (addr & 1) != 0 ) Gprs[rd] = Ror( Gprs[rd], 8 );
 				}
 				else
 				{
-					uint val = R[rd];
+					uint val = Gprs[rd];
 					if ( rd == 15 ) val += 4;
-					Bus.Write16( addr, (ushort)val );
+					Memory.Store16( addr, (ushort)val );
 				}
 				break;
 			case 2:
 				if ( isLoad )
-					R[rd] = (uint)(sbyte)Bus.Read8( addr );
+					Gprs[rd] = (uint)(sbyte)Memory.Load8( addr );
 				break;
 			case 3:
 				if ( isLoad )
 				{
 					if ( (addr & 1) != 0 )
-						R[rd] = (uint)(sbyte)Bus.Read8( addr );
+						Gprs[rd] = (uint)(sbyte)Memory.Load8( addr );
 					else
-						R[rd] = (uint)(short)Bus.Read16( addr );
+						Gprs[rd] = (uint)(short)Memory.Load16( addr );
 				}
 				break;
 		}
 
 		if ( !preIndex )
 		{
-			uint newAddr = addOffset ? R[rn] + offset : R[rn] - offset;
-			R[rn] = newAddr;
+			uint newAddr = addOffset ? Gprs[rn] + offset : Gprs[rn] - offset;
+			Gprs[rn] = newAddr;
 		}
 		else if ( writeBack )
 		{
-			R[rn] = addr;
+			Gprs[rn] = addr;
 		}
 
-		if ( isLoad && rd == 15 ) _pipelineFlushed = true;
+		if ( isLoad && rd == 15 ) _prefetchFlushed = true;
 
 		int dataRegion = (int)((addr >> 24) & 0xF);
 		if ( isLoad )
-			Cycles += Bus.WaitstatesNonseq16[dataRegion] + 2;
+			Cycles += Memory.WaitstatesNonseq16[dataRegion] + 2;
 		else
-			Cycles += Bus.WaitstatesNonseq16[dataRegion] + 1;
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq32[cr] - Bus.WaitstatesSeq32[cr];
+			Cycles += Memory.WaitstatesNonseq16[dataRegion] + 1;
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq32[cr] - Memory.WaitstatesSeq32[cr];
 	}
 
 	private void ArmSingleTransfer( uint opcode )
@@ -475,11 +475,11 @@ public partial class Arm7Cpu
 			uint rm = opcode & 0xF;
 			uint shiftType = (opcode >> 5) & 3;
 			uint shiftAmount = (opcode >> 7) & 0x1F;
-			offset = ApplyShift( R[rm], shiftType, shiftAmount );
+			offset = ApplyShift( Gprs[rm], shiftType, shiftAmount );
 		}
 
-		uint addr = R[rn];
-		if ( rn == 15 ) addr = R[15];
+		uint addr = Gprs[rn];
+		if ( rn == 15 ) addr = Gprs[15];
 
 		if ( preIndex )
 			addr = addOffset ? addr + offset : addr - offset;
@@ -487,45 +487,45 @@ public partial class Arm7Cpu
 		if ( isLoad )
 		{
 			if ( byteTransfer )
-				R[rd] = Bus.Read8( addr );
+				Gprs[rd] = Memory.Load8( addr );
 			else
-				R[rd] = ReadWordRotated( addr );
+				Gprs[rd] = ReadWordRotated( addr );
 
-			if ( rd == 15 ) _pipelineFlushed = true;
+			if ( rd == 15 ) _prefetchFlushed = true;
 		}
 		else
 		{
-			uint val = R[rd];
+			uint val = Gprs[rd];
 			if ( rd == 15 ) val += 4;
 
 			if ( byteTransfer )
-				Bus.Write8( addr, (byte)val );
+				Memory.Store8( addr, (byte)val );
 			else
-				Bus.Write32( addr, val );
+				Memory.Store32( addr, val );
 		}
 
 		if ( !preIndex )
 		{
-			R[rn] = addOffset ? R[rn] + offset : R[rn] - offset;
+			Gprs[rn] = addOffset ? Gprs[rn] + offset : Gprs[rn] - offset;
 		}
 		else if ( writeBack )
 		{
-			R[rn] = addr;
+			Gprs[rn] = addr;
 		}
 
 		int dataRegion = (int)((addr >> 24) & 0xF);
 		if ( isLoad )
 		{
-			int wait = byteTransfer ? Bus.WaitstatesNonseq16[dataRegion] : Bus.WaitstatesNonseq32[dataRegion];
+			int wait = byteTransfer ? Memory.WaitstatesNonseq16[dataRegion] : Memory.WaitstatesNonseq32[dataRegion];
 			Cycles += wait + 2;
 		}
 		else
 		{
-			int wait = byteTransfer ? Bus.WaitstatesNonseq16[dataRegion] : Bus.WaitstatesNonseq32[dataRegion];
+			int wait = byteTransfer ? Memory.WaitstatesNonseq16[dataRegion] : Memory.WaitstatesNonseq32[dataRegion];
 			Cycles += wait + 1;
 		}
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq32[cr] - Bus.WaitstatesSeq32[cr];
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq32[cr] - Memory.WaitstatesSeq32[cr];
 	}
 
 	private void ArmBlockTransfer( uint opcode )
@@ -542,27 +542,27 @@ public partial class Arm7Cpu
 		{
 			if ( isLoad )
 			{
-				R[15] = Bus.Read32( R[rn] );
-				_pipelineFlushed = true;
+				Gprs[15] = Memory.Load32( Gprs[rn] );
+				_prefetchFlushed = true;
 			}
 			else
 			{
-				Bus.Write32( R[rn], R[15] + 4 );
+				Memory.Store32( Gprs[rn], Gprs[15] + 4 );
 			}
 			if ( addOffset )
-				R[rn] += 0x40;
+				Gprs[rn] += 0x40;
 			else
-				R[rn] -= 0x40;
+				Gprs[rn] -= 0x40;
 
-			int dr0 = (int)((R[rn] >> 24) & 0xF);
-			Cycles += Bus.WaitstatesNonseq32[dr0] + (isLoad ? 3 : 2);
-			int cr0 = (int)((R[15] >> 24) & 0xF);
-			Cycles += Bus.WaitstatesNonseq32[cr0] - Bus.WaitstatesSeq32[cr0];
+			int dr0 = (int)((Gprs[rn] >> 24) & 0xF);
+			Cycles += Memory.WaitstatesNonseq32[dr0] + (isLoad ? 3 : 2);
+			int cr0 = (int)((Gprs[15] >> 24) & 0xF);
+			Cycles += Memory.WaitstatesNonseq32[cr0] - Memory.WaitstatesSeq32[cr0];
 			return;
 		}
 
 		int count = BitCount( regList );
-		uint baseAddr = R[rn];
+		uint baseAddr = Gprs[rn];
 
 		uint startAddr;
 		if ( addOffset )
@@ -580,14 +580,14 @@ public partial class Arm7Cpu
 
 			if ( isLoad )
 			{
-				uint value = Bus.Read32( addr );
+				uint value = Memory.Load32( addr );
 				if ( useUserBank && i >= 8 && i <= 14 )
 					SetUserReg( i, value );
 				else
-					R[i] = value;
+					Gprs[i] = value;
 				if ( i == 15 )
 				{
-					_pipelineFlushed = true;
+					_prefetchFlushed = true;
 					if ( psr )
 					{
 						uint spsr = GetSpsr();
@@ -602,9 +602,9 @@ public partial class Arm7Cpu
 				if ( useUserBank && i >= 8 && i <= 14 )
 					val = GetUserReg( i );
 				else
-					val = R[i];
+					val = Gprs[i];
 				if ( i == 15 ) val += 4;
-				Bus.Write32( addr, val );
+				Memory.Store32( addr, val );
 			}
 			addr += 4;
 		}
@@ -612,9 +612,9 @@ public partial class Arm7Cpu
 		if ( writeBack && !(isLoad && (regList & (1 << (int)rn)) != 0) )
 		{
 			if ( addOffset )
-				R[rn] = baseAddr + (uint)(count * 4);
+				Gprs[rn] = baseAddr + (uint)(count * 4);
 			else
-				R[rn] = baseAddr - (uint)(count * 4);
+				Gprs[rn] = baseAddr - (uint)(count * 4);
 		}
 
 		{
@@ -625,16 +625,16 @@ public partial class Arm7Cpu
 			{
 				int r = (int)((wAddr >> 24) & 0xF);
 				if ( w == 0 || r != prevRegion )
-					dataCycles += 1 + Bus.WaitstatesNonseq32[r];
+					dataCycles += 1 + Memory.WaitstatesNonseq32[r];
 				else
-					dataCycles += 1 + Bus.WaitstatesSeq32[r];
+					dataCycles += 1 + Memory.WaitstatesSeq32[r];
 				prevRegion = r;
 				wAddr += 4;
 			}
 			Cycles += dataCycles + (isLoad ? 1 : 0);
 		}
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq32[cr] - Bus.WaitstatesSeq32[cr];
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq32[cr] - Memory.WaitstatesSeq32[cr];
 	}
 
 	private void ArmBranch( uint opcode )
@@ -646,52 +646,52 @@ public partial class Arm7Cpu
 		offset <<= 2;
 
 		if ( link )
-			R[14] = R[15] - 4;
+			Gprs[14] = Gprs[15] - 4;
 
-		R[15] = (uint)(R[15] + offset);
-		_pipelineFlushed = true;
+		Gprs[15] = (uint)(Gprs[15] + offset);
+		_prefetchFlushed = true;
 	}
 
 	private void ArmBx( uint opcode )
 	{
 		uint rm = opcode & 0xF;
-		uint addr = R[rm];
+		uint addr = Gprs[rm];
 		ThumbMode = (addr & 1) != 0;
-		R[15] = addr & ~1u;
-		_pipelineFlushed = true;
+		Gprs[15] = addr & ~1u;
+		_prefetchFlushed = true;
 	}
 
 	private void ArmSwi( uint opcode )
 	{
 		uint comment = (opcode >> 16) & 0xFF;
-		if ( Gba.HleBios.HandleSwi( comment ) )
+		if ( Gba.Bios.HandleSwi( comment ) )
 		{
-			int biosStall = Gba.HleBios.BiosStall;
+			int biosStall = Gba.Bios.BiosStall;
 			if ( biosStall > 0 )
 			{
-				int region = (int)((R[15] >> 24) & 0xF);
+				int region = (int)((Gprs[15] >> 24) & 0xF);
 				Cycles += biosStall + 45
-					+ Bus.WaitstatesNonseq16[region]
-					+ Bus.WaitstatesNonseq32[region]
-					+ Bus.WaitstatesSeq32[region];
+					+ Memory.WaitstatesNonseq16[region]
+					+ Memory.WaitstatesNonseq32[region]
+					+ Memory.WaitstatesSeq32[region];
 			}
 			return;
 		}
 
-		uint savedCpsr = GetCpsrRaw(); SwitchMode( CpuMode.Supervisor );
+		uint savedCpsr = GetCpsrRaw(); SetPrivilegeMode( PrivilegeMode.Supervisor );
 		SetSpsr( savedCpsr );
-		R[14] = R[15] - 4;
+		Gprs[14] = Gprs[15] - 4;
 		IrqDisable = true;
 		ThumbMode = false;
-		R[15] = GbaConstants.VectorSwi;
-		_pipelineFlushed = true;
+		Gprs[15] = GbaConstants.BaseSwi;
+		_prefetchFlushed = true;
 	}
 
 	private void ArmMrs( uint opcode )
 	{
 		uint rd = (opcode >> 12) & 0xF;
 		bool useSPSR = ((opcode >> 22) & 1) != 0;
-		R[rd] = useSPSR ? GetSpsr() : GetCpsrRaw();
+		Gprs[rd] = useSPSR ? GetSpsr() : GetCpsrRaw();
 	}
 
 	private void ArmMsr( uint opcode )
@@ -710,10 +710,10 @@ public partial class Arm7Cpu
 		}
 		else
 		{
-			value = R[opcode & 0xF];
+			value = Gprs[opcode & 0xF];
 		}
 
-		if ( Mode == CpuMode.User )
+		if ( PrivilegeMode == PrivilegeMode.User )
 			mask &= 0xFF000000;
 
 		if ( useSPSR )
@@ -730,7 +730,7 @@ public partial class Arm7Cpu
 			SetCpsr( cpsr );
 			bool newThumb = (cpsr & 0x20) != 0;
 			if ( oldThumb != newThumb )
-				_pipelineFlushed = true;
+				_prefetchFlushed = true;
 		}
 	}
 }

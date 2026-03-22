@@ -1,15 +1,14 @@
-﻿using System.IO;
-using System.Runtime.CompilerServices;
+using System.IO;
 
 namespace sGBA;
 
-public partial class Apu
+public partial class GbaAudio
 {
-	public GbaSystem Gba { get; }
+	public Gba Gba { get; }
 
 	public const int SampleRate = 32768;
-	public const int CyclesPerSample = GbaConstants.Arm7Clock / SampleRate;
-	public const int SamplesPerFrame = (GbaConstants.FrameCycles + CyclesPerSample - 1) / CyclesPerSample;
+	public const int CyclesPerSample = GbaConstants.Arm7TdmiFrequency / SampleRate;
+	public const int SamplesPerFrame = (GbaConstants.VideoTotalLength + CyclesPerSample - 1) / CyclesPerSample;
 	public short[] OutputBuffer { get; set; } = new short[SamplesPerFrame * 2];
 	public int SamplesWritten { get; set; }
 
@@ -138,7 +137,7 @@ public partial class Apu
 		0, 1, 1, 1, 1, 1, 1, 0,
 	];
 
-	public Apu( GbaSystem gba )
+	public GbaAudio( Gba gba )
 	{
 		Gba = gba;
 		SoundBias = 0x0200;
@@ -317,7 +316,7 @@ public partial class Apu
 		}
 	}
 
-	public void SerializeState( BinaryWriter w )
+	public void Serialize( BinaryWriter w )
 	{
 		w.Write( _nextSampleCycle );
 		w.Write( _nextFrameSeqCycle );
@@ -357,7 +356,7 @@ public partial class Apu
 		w.Write( _ch4EnvInitVolume ); w.Write( _ch4EnvDead ); w.Write( _ch4EnvNextStep );
 	}
 
-	public void DeserializeState( BinaryReader r )
+	public void Deserialize( BinaryReader r )
 	{
 		_nextSampleCycle = r.ReadInt64();
 		_nextFrameSeqCycle = r.ReadInt64();

@@ -4,7 +4,7 @@ using Sandbox.Rendering;
 
 namespace sGBA;
 
-public partial class Ppu
+public partial class GbaVideo
 {
 	[StructLayout( LayoutKind.Sequential )]
 	public struct ScanlineState
@@ -196,7 +196,7 @@ public partial class Ppu
 		}
 		s.EnabledAtYMask = enabledMask;
 
-		var ram = Gba.Bus.PaletteRam;
+		var ram = Gba.Memory.PaletteRam;
 		var palDst = _paletteFrames[_writeSlot];
 		int baseIdx = y * 256;
 		Buffer.BlockCopy( ram, 0, palDst, baseIdx * 4, 1024 );
@@ -207,7 +207,7 @@ public partial class Ppu
 		if ( !GpuReady ) return;
 
 		var sprites = _spriteFrames[_writeSlot];
-		byte[] oam = Gba.Bus.Oam;
+		byte[] oam = Gba.Memory.Oam;
 		bool mapping1D = (DispCnt & 0x40) != 0;
 		int bgMode = DispCnt & 7;
 		int count = 0;
@@ -329,7 +329,7 @@ public partial class Ppu
 	private void SnapshotVram()
 	{
 		if ( !GpuReady ) return;
-		Buffer.BlockCopy( Gba.Bus.Vram, 0, _vramFrames[_writeSlot], 0, Gba.Bus.Vram.Length );
+		Buffer.BlockCopy( Gba.Memory.Vram, 0, _vramFrames[_writeSlot], 0, Gba.Memory.Vram.Length );
 	}
 
 	private void CommitFrame()

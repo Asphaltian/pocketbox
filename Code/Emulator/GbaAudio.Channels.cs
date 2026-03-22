@@ -1,6 +1,6 @@
 namespace sGBA;
 
-public partial class Apu
+public partial class GbaAudio
 {
 	private void RunPsg( long targetCycles )
 	{

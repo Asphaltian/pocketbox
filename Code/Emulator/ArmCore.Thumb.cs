@@ -1,14 +1,14 @@
 namespace sGBA;
 
-public partial class Arm7Cpu
+public partial class ArmCore
 {
 	private void ExecuteThumb()
 	{
-		uint opcode = _pipeline0 & 0xFFFF;
-		_pipeline0 = _pipeline1;
-		_pipeline1 = Bus.Read16( R[15] );
-		OpenBusPrefetch = _pipeline1 | (_pipeline1 << 16);
-		Cycles += 1 + Bus.WaitstatesSeq16[(R[15] >> 24) & 0xF];
+		uint opcode = _prefetch0 & 0xFFFF;
+		_prefetch0 = _prefetch1;
+		_prefetch1 = Memory.Load16( Gprs[15] );
+		OpenBusPrefetch = _prefetch1 | (_prefetch1 << 16);
+		Cycles += 1 + Memory.WaitstatesSeq16[(Gprs[15] >> 24) & 0xF];
 
 		uint top = opcode >> 8;
 
@@ -86,8 +86,8 @@ public partial class Arm7Cpu
 				break;
 		}
 
-		if ( !_pipelineFlushed )
-			R[15] += 2;
+		if ( !_prefetchFlushed )
+			Gprs[15] += 2;
 	}
 
 	private void ThumbShiftImm( uint opcode )
@@ -96,26 +96,26 @@ public partial class Arm7Cpu
 		uint rm = (opcode >> 3) & 7;
 		uint amount = (opcode >> 6) & 0x1F;
 		uint op = (opcode >> 11) & 3;
-		uint val = R[rm];
+		uint val = Gprs[rm];
 
 		switch ( op )
 		{
 			case 0:
-				if ( amount == 0 ) { R[rd] = val; }
-				else { FlagC = ((val >> (int)(32 - amount)) & 1) != 0; R[rd] = val << (int)amount; }
+				if ( amount == 0 ) { Gprs[rd] = val; }
+				else { FlagC = ((val >> (int)(32 - amount)) & 1) != 0; Gprs[rd] = val << (int)amount; }
 				break;
 			case 1:
-				if ( amount == 0 ) { FlagC = (val & 0x80000000) != 0; R[rd] = 0; }
-				else { FlagC = ((val >> (int)(amount - 1)) & 1) != 0; R[rd] = val >> (int)amount; }
+				if ( amount == 0 ) { FlagC = (val & 0x80000000) != 0; Gprs[rd] = 0; }
+				else { FlagC = ((val >> (int)(amount - 1)) & 1) != 0; Gprs[rd] = val >> (int)amount; }
 				break;
 			case 2:
-				if ( amount == 0 ) { FlagC = (val & 0x80000000) != 0; R[rd] = FlagC ? 0xFFFFFFFF : 0; }
-				else { FlagC = ((val >> (int)(amount - 1)) & 1) != 0; R[rd] = (uint)((int)val >> (int)amount); }
+				if ( amount == 0 ) { FlagC = (val & 0x80000000) != 0; Gprs[rd] = FlagC ? 0xFFFFFFFF : 0; }
+				else { FlagC = ((val >> (int)(amount - 1)) & 1) != 0; Gprs[rd] = (uint)((int)val >> (int)amount); }
 				break;
 		}
 
-		FlagN = (R[rd] & 0x80000000) != 0;
-		FlagZ = R[rd] == 0;
+		FlagN = (Gprs[rd] & 0x80000000) != 0;
+		FlagZ = Gprs[rd] == 0;
 	}
 
 	private void ThumbAddSub( uint opcode )
@@ -125,18 +125,18 @@ public partial class Arm7Cpu
 		bool isImm = ((opcode >> 10) & 1) != 0;
 		bool isSub = ((opcode >> 9) & 1) != 0;
 
-		uint operand = isImm ? (opcode >> 6) & 7 : R[(opcode >> 6) & 7];
-		uint a = R[rn];
+		uint operand = isImm ? (opcode >> 6) & 7 : Gprs[(opcode >> 6) & 7];
+		uint a = Gprs[rn];
 
 		if ( isSub )
 		{
-			R[rd] = a - operand;
-			SetSubFlags( a, operand, R[rd] );
+			Gprs[rd] = a - operand;
+			SetSubFlags( a, operand, Gprs[rd] );
 		}
 		else
 		{
-			R[rd] = a + operand;
-			SetAddFlags( a, operand, R[rd] );
+			Gprs[rd] = a + operand;
+			SetAddFlags( a, operand, Gprs[rd] );
 		}
 	}
 
@@ -149,26 +149,26 @@ public partial class Arm7Cpu
 		switch ( op )
 		{
 			case 0:
-				R[rd] = imm;
+				Gprs[rd] = imm;
 				FlagN = false;
 				FlagZ = imm == 0;
 				break;
 			case 1:
-				uint cmpResult = R[rd] - imm;
-				SetSubFlags( R[rd], imm, cmpResult );
+				uint cmpResult = Gprs[rd] - imm;
+				SetSubFlags( Gprs[rd], imm, cmpResult );
 				break;
 			case 2:
 				{
-					uint old = R[rd];
-					R[rd] += imm;
-					SetAddFlags( old, imm, R[rd] );
+					uint old = Gprs[rd];
+					Gprs[rd] += imm;
+					SetAddFlags( old, imm, Gprs[rd] );
 				}
 				break;
 			case 3:
 				{
-					uint old = R[rd];
-					R[rd] -= imm;
-					SetSubFlags( old, imm, R[rd] );
+					uint old = Gprs[rd];
+					Gprs[rd] -= imm;
+					SetSubFlags( old, imm, Gprs[rd] );
 				}
 				break;
 		}
@@ -179,13 +179,13 @@ public partial class Arm7Cpu
 		uint rd = opcode & 7;
 		uint rm = (opcode >> 3) & 7;
 		uint op = (opcode >> 6) & 0xF;
-		uint a = R[rd], b = R[rm];
+		uint a = Gprs[rd], b = Gprs[rm];
 		uint result;
 
 		switch ( op )
 		{
-			case 0x0: result = a & b; SetLogicFlags( result, FlagC ); R[rd] = result; break;
-			case 0x1: result = a ^ b; SetLogicFlags( result, FlagC ); R[rd] = result; break;
+			case 0x0: result = a & b; SetLogicFlags( result, FlagC ); Gprs[rd] = result; break;
+			case 0x1: result = a ^ b; SetLogicFlags( result, FlagC ); Gprs[rd] = result; break;
 			case 0x2:
 				{
 					uint shift = b & 0xFF;
@@ -194,7 +194,7 @@ public partial class Arm7Cpu
 					else if ( shift == 32 ) { FlagC = (a & 1) != 0; result = 0; }
 					else { FlagC = false; result = 0; }
 					FlagN = (result & 0x80000000) != 0; FlagZ = result == 0;
-					R[rd] = result; Cycles++;
+					Gprs[rd] = result; Cycles++;
 				}
 				break;
 			case 0x3:
@@ -205,7 +205,7 @@ public partial class Arm7Cpu
 					else if ( shift == 32 ) { FlagC = (a & 0x80000000) != 0; result = 0; }
 					else { FlagC = false; result = 0; }
 					FlagN = (result & 0x80000000) != 0; FlagZ = result == 0;
-					R[rd] = result; Cycles++;
+					Gprs[rd] = result; Cycles++;
 				}
 				break;
 			case 0x4:
@@ -215,35 +215,35 @@ public partial class Arm7Cpu
 					else if ( shift < 32 ) { FlagC = ((a >> (int)(shift - 1)) & 1) != 0; result = (uint)((int)a >> (int)shift); }
 					else { FlagC = (a & 0x80000000) != 0; result = FlagC ? 0xFFFFFFFF : 0u; }
 					FlagN = (result & 0x80000000) != 0; FlagZ = result == 0;
-					R[rd] = result; Cycles++;
+					Gprs[rd] = result; Cycles++;
 				}
 				break;
-			case 0x5: result = a + b + (FlagC ? 1u : 0); SetAdcFlags( a, b, FlagC ); R[rd] = result; break;
-			case 0x6: result = a - b - (FlagC ? 0u : 1u); SetSbcFlags( a, b, FlagC ); R[rd] = result; break;
+			case 0x5: result = a + b + (FlagC ? 1u : 0); SetAdcFlags( a, b, FlagC ); Gprs[rd] = result; break;
+			case 0x6: result = a - b - (FlagC ? 0u : 1u); SetSbcFlags( a, b, FlagC ); Gprs[rd] = result; break;
 			case 0x7:
 				{
 					uint shift = b & 0xFF;
 					if ( shift == 0 ) { result = a; }
 					else { shift &= 31; if ( shift == 0 ) { FlagC = (a & 0x80000000) != 0; result = a; } else { result = Ror( a, (int)shift ); FlagC = (result & 0x80000000) != 0; } }
 					FlagN = (result & 0x80000000) != 0; FlagZ = result == 0;
-					R[rd] = result; Cycles++;
+					Gprs[rd] = result; Cycles++;
 				}
 				break;
 			case 0x8: result = a & b; SetLogicFlags( result, FlagC ); break;
-			case 0x9: result = 0 - b; SetSubFlags( 0, b, result ); R[rd] = result; break;
+			case 0x9: result = 0 - b; SetSubFlags( 0, b, result ); Gprs[rd] = result; break;
 			case 0xA: result = a - b; SetSubFlags( a, b, result ); break;
 			case 0xB: result = a + b; SetAddFlags( a, b, result ); break;
-			case 0xC: result = a | b; SetLogicFlags( result, FlagC ); R[rd] = result; break;
+			case 0xC: result = a | b; SetLogicFlags( result, FlagC ); Gprs[rd] = result; break;
 			case 0xD:
 				result = a * b;
 				FlagN = (result & 0x80000000) != 0;
 				FlagZ = result == 0;
-				R[rd] = result;
-				Cycles += Bus.MemoryStall( R[15], MultiplyExtraCycles( a ) );
-				{ int thumbMulCr = (int)((R[15] >> 24) & 0xF); Cycles += Bus.WaitstatesNonseq16[thumbMulCr] - Bus.WaitstatesSeq16[thumbMulCr]; }
+				Gprs[rd] = result;
+				Cycles += Memory.MemoryStall( Gprs[15], MultiplyExtraCycles( a ) );
+				{ int thumbMulCr = (int)((Gprs[15] >> 24) & 0xF); Cycles += Memory.WaitstatesNonseq16[thumbMulCr] - Memory.WaitstatesSeq16[thumbMulCr]; }
 				break;
-			case 0xE: result = a & ~b; SetLogicFlags( result, FlagC ); R[rd] = result; break;
-			case 0xF: result = ~b; SetLogicFlags( result, FlagC ); R[rd] = result; break;
+			case 0xE: result = a & ~b; SetLogicFlags( result, FlagC ); Gprs[rd] = result; break;
+			case 0xF: result = ~b; SetLogicFlags( result, FlagC ); Gprs[rd] = result; break;
 		}
 	}
 
@@ -256,23 +256,23 @@ public partial class Arm7Cpu
 		switch ( op )
 		{
 			case 0:
-				R[rd] += R[rm];
-				if ( rd == 15 ) _pipelineFlushed = true;
+				Gprs[rd] += Gprs[rm];
+				if ( rd == 15 ) _prefetchFlushed = true;
 				break;
 			case 1:
 				{
-					uint result = R[rd] - R[rm];
-					SetSubFlags( R[rd], R[rm], result );
+					uint result = Gprs[rd] - Gprs[rm];
+					SetSubFlags( Gprs[rd], Gprs[rm], result );
 				}
 				break;
 			case 2:
-				R[rd] = R[rm];
-				if ( rd == 15 ) _pipelineFlushed = true;
+				Gprs[rd] = Gprs[rm];
+				if ( rd == 15 ) _prefetchFlushed = true;
 				break;
 			case 3:
-				ThumbMode = (R[rm] & 1) != 0;
-				R[15] = R[rm] & ~1u;
-				_pipelineFlushed = true;
+				ThumbMode = (Gprs[rm] & 1) != 0;
+				Gprs[15] = Gprs[rm] & ~1u;
+				_prefetchFlushed = true;
 				break;
 		}
 	}
@@ -281,13 +281,13 @@ public partial class Arm7Cpu
 	{
 		uint rd = (opcode >> 8) & 7;
 		uint offset = (opcode & 0xFF) << 2;
-		uint addr = (R[15] & ~3u) + offset;
-		R[rd] = Bus.Read32( addr );
+		uint addr = (Gprs[15] & ~3u) + offset;
+		Gprs[rd] = Memory.Load32( addr );
 
 		int dr = (int)((addr >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq32[dr] + 2;
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq16[cr] - Bus.WaitstatesSeq16[cr];
+		Cycles += Memory.WaitstatesNonseq32[dr] + 2;
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq16[cr] - Memory.WaitstatesSeq16[cr];
 	}
 
 	private void ThumbLoadStoreReg( uint opcode )
@@ -295,38 +295,38 @@ public partial class Arm7Cpu
 		uint rd = opcode & 7;
 		uint rn = (opcode >> 3) & 7;
 		uint rm = (opcode >> 6) & 7;
-		uint addr = R[rn] + R[rm];
+		uint addr = Gprs[rn] + Gprs[rm];
 		bool isLoad = ((opcode >> 11) & 1) != 0;
 		bool isByte = ((opcode >> 10) & 1) != 0;
 
 		if ( isLoad )
 		{
 			if ( isByte )
-				R[rd] = Bus.Read8( addr );
+				Gprs[rd] = Memory.Load8( addr );
 			else
-				R[rd] = ReadWordRotated( addr );
+				Gprs[rd] = ReadWordRotated( addr );
 		}
 		else
 		{
 			if ( isByte )
-				Bus.Write8( addr, (byte)R[rd] );
+				Memory.Store8( addr, (byte)Gprs[rd] );
 			else
-				Bus.Write32( addr, R[rd] );
+				Memory.Store32( addr, Gprs[rd] );
 		}
 
 		int dr = (int)((addr >> 24) & 0xF);
 		if ( isLoad )
 		{
-			int wait = isByte ? Bus.WaitstatesNonseq16[dr] : Bus.WaitstatesNonseq32[dr];
+			int wait = isByte ? Memory.WaitstatesNonseq16[dr] : Memory.WaitstatesNonseq32[dr];
 			Cycles += wait + 2;
 		}
 		else
 		{
-			int wait = isByte ? Bus.WaitstatesNonseq16[dr] : Bus.WaitstatesNonseq32[dr];
+			int wait = isByte ? Memory.WaitstatesNonseq16[dr] : Memory.WaitstatesNonseq32[dr];
 			Cycles += wait + 1;
 		}
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq16[cr] - Bus.WaitstatesSeq16[cr];
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq16[cr] - Memory.WaitstatesSeq16[cr];
 	}
 
 	private void ThumbLoadStoreSignedHalf( uint opcode )
@@ -334,26 +334,26 @@ public partial class Arm7Cpu
 		uint rd = opcode & 7;
 		uint rn = (opcode >> 3) & 7;
 		uint rm = (opcode >> 6) & 7;
-		uint addr = R[rn] + R[rm];
+		uint addr = Gprs[rn] + Gprs[rm];
 		uint op = (opcode >> 10) & 3;
 
 		switch ( op )
 		{
-			case 0: Bus.Write16( addr, (ushort)R[rd] ); break;
-			case 1: R[rd] = (uint)(sbyte)Bus.Read8( addr ); break;
-			case 2: R[rd] = Bus.Read16( addr ); break;
+			case 0: Memory.Store16( addr, (ushort)Gprs[rd] ); break;
+			case 1: Gprs[rd] = (uint)(sbyte)Memory.Load8( addr ); break;
+			case 2: Gprs[rd] = Memory.Load16( addr ); break;
 			case 3:
 				if ( (addr & 1) != 0 )
-					R[rd] = (uint)(sbyte)Bus.Read8( addr );
+					Gprs[rd] = (uint)(sbyte)Memory.Load8( addr );
 				else
-					R[rd] = (uint)(short)Bus.Read16( addr );
+					Gprs[rd] = (uint)(short)Memory.Load16( addr );
 				break;
 		}
 
 		int dr = (int)((addr >> 24) & 0xF); bool isStore = op == 0;
-		Cycles += Bus.WaitstatesNonseq16[dr] + (isStore ? 1 : 2);
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq16[cr] - Bus.WaitstatesSeq16[cr];
+		Cycles += Memory.WaitstatesNonseq16[dr] + (isStore ? 1 : 2);
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq16[cr] - Memory.WaitstatesSeq16[cr];
 	}
 
 	private void ThumbLoadStoreImmWord( uint opcode )
@@ -371,39 +371,39 @@ public partial class Arm7Cpu
 			isByte = ((opcode >> 12) & 1) != 0;
 			if ( isByte )
 			{
-				addr = R[rn] + offset5;
-				if ( isLoad ) R[rd] = Bus.Read8( addr );
-				else Bus.Write8( addr, (byte)R[rd] );
+				addr = Gprs[rn] + offset5;
+				if ( isLoad ) Gprs[rd] = Memory.Load8( addr );
+				else Memory.Store8( addr, (byte)Gprs[rd] );
 			}
 			else
 			{
-				addr = R[rn] + offset5 * 4;
-				if ( isLoad ) R[rd] = ReadWordRotated( addr );
-				else Bus.Write32( addr, R[rd] );
+				addr = Gprs[rn] + offset5 * 4;
+				if ( isLoad ) Gprs[rd] = ReadWordRotated( addr );
+				else Memory.Store32( addr, Gprs[rd] );
 			}
 		}
 		else if ( top3 == 2 )
 		{
 			uint rm = (opcode >> 6) & 7;
-			addr = R[rn] + R[rm];
+			addr = Gprs[rn] + Gprs[rm];
 			isByte = ((opcode >> 10) & 1) != 0;
 			if ( isByte )
 			{
-				if ( isLoad ) R[rd] = Bus.Read8( addr );
-				else Bus.Write8( addr, (byte)R[rd] );
+				if ( isLoad ) Gprs[rd] = Memory.Load8( addr );
+				else Memory.Store8( addr, (byte)Gprs[rd] );
 			}
 			else
 			{
-				if ( isLoad ) R[rd] = ReadWordRotated( addr );
-				else Bus.Write32( addr, R[rd] );
+				if ( isLoad ) Gprs[rd] = ReadWordRotated( addr );
+				else Memory.Store32( addr, Gprs[rd] );
 			}
 		}
 
 		int dr = (int)((addr >> 24) & 0xF);
-		int wait = isByte ? Bus.WaitstatesNonseq16[dr] : Bus.WaitstatesNonseq32[dr];
+		int wait = isByte ? Memory.WaitstatesNonseq16[dr] : Memory.WaitstatesNonseq32[dr];
 		Cycles += wait + (isLoad ? 2 : 1);
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq16[cr] - Bus.WaitstatesSeq16[cr];
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq16[cr] - Memory.WaitstatesSeq16[cr];
 	}
 
 	private void ThumbLoadStoreHalf( uint opcode )
@@ -411,36 +411,36 @@ public partial class Arm7Cpu
 		uint rd = opcode & 7;
 		uint rn = (opcode >> 3) & 7;
 		uint offset = ((opcode >> 6) & 0x1F) << 1;
-		uint addr = R[rn] + offset;
+		uint addr = Gprs[rn] + offset;
 		bool isLoad = ((opcode >> 11) & 1) != 0;
 
 		if ( isLoad )
-			R[rd] = Bus.Read16( addr );
+			Gprs[rd] = Memory.Load16( addr );
 		else
-			Bus.Write16( addr, (ushort)R[rd] );
+			Memory.Store16( addr, (ushort)Gprs[rd] );
 
 		int dr = (int)((addr >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq16[dr] + (isLoad ? 2 : 1);
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq16[cr] - Bus.WaitstatesSeq16[cr];
+		Cycles += Memory.WaitstatesNonseq16[dr] + (isLoad ? 2 : 1);
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq16[cr] - Memory.WaitstatesSeq16[cr];
 	}
 
 	private void ThumbSpRelLoadStore( uint opcode )
 	{
 		uint rd = (opcode >> 8) & 7;
 		uint offset = (opcode & 0xFF) << 2;
-		uint addr = R[13] + offset;
+		uint addr = Gprs[13] + offset;
 		bool isLoad = ((opcode >> 11) & 1) != 0;
 
 		if ( isLoad )
-			R[rd] = ReadWordRotated( addr );
+			Gprs[rd] = ReadWordRotated( addr );
 		else
-			Bus.Write32( addr, R[rd] );
+			Memory.Store32( addr, Gprs[rd] );
 
 		int dr = (int)((addr >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq32[dr] + (isLoad ? 2 : 1);
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq16[cr] - Bus.WaitstatesSeq16[cr];
+		Cycles += Memory.WaitstatesNonseq32[dr] + (isLoad ? 2 : 1);
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq16[cr] - Memory.WaitstatesSeq16[cr];
 	}
 
 	private void ThumbLoadAddress( uint opcode )
@@ -450,18 +450,18 @@ public partial class Arm7Cpu
 		bool useSP = ((opcode >> 11) & 1) != 0;
 
 		if ( useSP )
-			R[rd] = R[13] + offset;
+			Gprs[rd] = Gprs[13] + offset;
 		else
-			R[rd] = (R[15] & ~3u) + offset;
+			Gprs[rd] = (Gprs[15] & ~3u) + offset;
 	}
 
 	private void ThumbSpOffset( uint opcode )
 	{
 		uint offset = (opcode & 0x7F) << 2;
 		if ( (opcode & 0x80) != 0 )
-			R[13] -= offset;
+			Gprs[13] -= offset;
 		else
-			R[13] += offset;
+			Gprs[13] += offset;
 	}
 
 	private void ThumbPushPop( uint opcode )
@@ -473,50 +473,50 @@ public partial class Arm7Cpu
 
 		if ( isLoad )
 		{
-			uint addr = R[13];
+			uint addr = Gprs[13];
 			for ( int i = 0; i < 8; i++ )
 			{
 				if ( (regList & (1 << i)) != 0 )
 				{
-					R[i] = Bus.Read32( addr );
+					Gprs[i] = Memory.Load32( addr );
 					addr += 4;
 				}
 			}
 			if ( extraReg )
 			{
-				R[15] = Bus.Read32( addr );
+				Gprs[15] = Memory.Load32( addr );
 				addr += 4;
-				_pipelineFlushed = true;
+				_prefetchFlushed = true;
 			}
-			R[13] = addr;
+			Gprs[13] = addr;
 		}
 		else
 		{
-			uint addr = R[13] - (uint)(count * 4);
-			R[13] = addr;
+			uint addr = Gprs[13] - (uint)(count * 4);
+			Gprs[13] = addr;
 			for ( int i = 0; i < 8; i++ )
 			{
 				if ( (regList & (1 << i)) != 0 )
 				{
-					Bus.Write32( addr, R[i] );
+					Memory.Store32( addr, Gprs[i] );
 					addr += 4;
 				}
 			}
 			if ( extraReg )
 			{
-				Bus.Write32( addr, R[14] );
+				Memory.Store32( addr, Gprs[14] );
 			}
 		}
 
-		int dr = (int)((R[13] >> 24) & 0xF);
+		int dr = (int)((Gprs[13] >> 24) & 0xF);
 		if ( count > 0 )
 		{
-			int firstWait = Bus.WaitstatesNonseq32[dr];
-			int seqWait = Bus.WaitstatesSeq32[dr];
+			int firstWait = Memory.WaitstatesNonseq32[dr];
+			int seqWait = Memory.WaitstatesSeq32[dr];
 			Cycles += firstWait + 1 + (count - 1) * (seqWait + 1) + (isLoad ? 1 : 0);
 		}
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq16[cr] - Bus.WaitstatesSeq16[cr];
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq16[cr] - Memory.WaitstatesSeq16[cr];
 	}
 
 	private void ThumbBlockTransfer( uint opcode )
@@ -524,24 +524,24 @@ public partial class Arm7Cpu
 		uint rn = (opcode >> 8) & 7;
 		bool isLoad = ((opcode >> 11) & 1) != 0;
 		byte regList = (byte)(opcode & 0xFF);
-		uint addr = R[rn];
+		uint addr = Gprs[rn];
 
 		if ( regList == 0 )
 		{
 			if ( isLoad )
 			{
-				R[15] = Bus.Read32( addr );
-				_pipelineFlushed = true;
+				Gprs[15] = Memory.Load32( addr );
+				_prefetchFlushed = true;
 			}
 			else
 			{
-				Bus.Write32( addr, R[15] + 2 );
+				Memory.Store32( addr, Gprs[15] + 2 );
 			}
-			R[rn] += 0x40;
+			Gprs[rn] += 0x40;
 
-			int dr0 = (int)((addr >> 24) & 0xF); Cycles += Bus.WaitstatesNonseq32[dr0] + (isLoad ? 3 : 2);
-			int cr0 = (int)((R[15] >> 24) & 0xF);
-			Cycles += Bus.WaitstatesNonseq16[cr0] - Bus.WaitstatesSeq16[cr0];
+			int dr0 = (int)((addr >> 24) & 0xF); Cycles += Memory.WaitstatesNonseq32[dr0] + (isLoad ? 3 : 2);
+			int cr0 = (int)((Gprs[15] >> 24) & 0xF);
+			Cycles += Memory.WaitstatesNonseq16[cr0] - Memory.WaitstatesSeq16[cr0];
 			return;
 		}
 
@@ -553,14 +553,14 @@ public partial class Arm7Cpu
 			if ( (regList & (1 << i)) == 0 ) continue;
 
 			if ( isLoad )
-				R[i] = Bus.Read32( addr );
+				Gprs[i] = Memory.Load32( addr );
 			else
-				Bus.Write32( addr, R[i] );
+				Memory.Store32( addr, Gprs[i] );
 			addr += 4;
 		}
 
 		if ( !isLoad || (regList & (1 << (int)rn)) == 0 )
-			R[rn] = addr;
+			Gprs[rn] = addr;
 
 		{
 			uint wAddr = startAddr;
@@ -570,16 +570,16 @@ public partial class Arm7Cpu
 			{
 				int r = (int)((wAddr >> 24) & 0xF);
 				if ( w == 0 || r != prevRegion )
-					dataCycles += 1 + Bus.WaitstatesNonseq32[r];
+					dataCycles += 1 + Memory.WaitstatesNonseq32[r];
 				else
-					dataCycles += 1 + Bus.WaitstatesSeq32[r];
+					dataCycles += 1 + Memory.WaitstatesSeq32[r];
 				prevRegion = r;
 				wAddr += 4;
 			}
 			Cycles += dataCycles + (isLoad ? 1 : 0);
 		}
-		int cr = (int)((R[15] >> 24) & 0xF);
-		Cycles += Bus.WaitstatesNonseq16[cr] - Bus.WaitstatesSeq16[cr];
+		int cr = (int)((Gprs[15] >> 24) & 0xF);
+		Cycles += Memory.WaitstatesNonseq16[cr] - Memory.WaitstatesSeq16[cr];
 	}
 
 	private void ThumbCondBranch( uint opcode )
@@ -589,8 +589,8 @@ public partial class Arm7Cpu
 
 		int offset = (sbyte)(opcode & 0xFF);
 		offset <<= 1;
-		R[15] = (uint)(R[15] + offset);
-		_pipelineFlushed = true;
+		Gprs[15] = (uint)(Gprs[15] + offset);
+		_prefetchFlushed = true;
 	}
 
 	private void ThumbBranch( uint opcode )
@@ -598,8 +598,8 @@ public partial class Arm7Cpu
 		int offset = (int)(opcode & 0x7FF);
 		if ( (offset & 0x400) != 0 ) offset |= unchecked((int)0xFFFFF800);
 		offset <<= 1;
-		R[15] = (uint)(R[15] + offset);
-		_pipelineFlushed = true;
+		Gprs[15] = (uint)(Gprs[15] + offset);
+		_prefetchFlushed = true;
 	}
 
 	private void ThumbBranchLink( uint opcode )
@@ -610,41 +610,41 @@ public partial class Arm7Cpu
 		{
 			int offset = (int)(opcode & 0x7FF);
 			if ( (offset & 0x400) != 0 ) offset |= unchecked((int)0xFFFFF800);
-			R[14] = (uint)(R[15] + (offset << 12));
+			Gprs[14] = (uint)(Gprs[15] + (offset << 12));
 		}
 		else
 		{
-			uint temp = R[14] + ((opcode & 0x7FF) << 1);
-			R[14] = (R[15] - 2) | 1;
-			R[15] = temp;
-			_pipelineFlushed = true;
+			uint temp = Gprs[14] + ((opcode & 0x7FF) << 1);
+			Gprs[14] = (Gprs[15] - 2) | 1;
+			Gprs[15] = temp;
+			_prefetchFlushed = true;
 		}
 	}
 
 	private void ThumbSwi( uint opcode )
 	{
 		uint comment = opcode & 0xFF;
-		if ( Gba.HleBios.HandleSwi( comment ) )
+		if ( Gba.Bios.HandleSwi( comment ) )
 		{
-			int biosStall = Gba.HleBios.BiosStall;
+			int biosStall = Gba.Bios.BiosStall;
 			if ( biosStall > 0 )
 			{
-				int region = (int)((R[15] >> 24) & 0xF);
+				int region = (int)((Gprs[15] >> 24) & 0xF);
 				Cycles += biosStall + 45
-					+ Bus.WaitstatesNonseq16[region]
-					+ Bus.WaitstatesNonseq16[region]
-					+ Bus.WaitstatesSeq16[region];
+					+ Memory.WaitstatesNonseq16[region]
+					+ Memory.WaitstatesNonseq16[region]
+					+ Memory.WaitstatesSeq16[region];
 			}
 			return;
 		}
 
 		uint savedCpsr = GetCpsrRaw();
-		SwitchMode( CpuMode.Supervisor );
+		SetPrivilegeMode( PrivilegeMode.Supervisor );
 		SetSpsr( savedCpsr );
-		R[14] = R[15] - 2;
+		Gprs[14] = Gprs[15] - 2;
 		IrqDisable = true;
 		ThumbMode = false;
-		R[15] = GbaConstants.VectorSwi;
-		_pipelineFlushed = true;
+		Gprs[15] = GbaConstants.BaseSwi;
+		_prefetchFlushed = true;
 	}
 }

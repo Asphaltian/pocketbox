@@ -1,18 +1,18 @@
 namespace sGBA;
 
-public class TimerController
+public class GbaTimerController
 {
-	public GbaSystem Gba { get; }
-	public TimerChannel[] Channels = new TimerChannel[4];
+	public Gba Gba { get; }
+	public GbaTimer[] Channels = new GbaTimer[4];
 	public long NextGlobalEvent = long.MaxValue;
 
 	private static readonly int[] PrescaleBits = [0, 6, 8, 10];
 
-	public TimerController( GbaSystem gba )
+	public GbaTimerController( Gba gba )
 	{
 		Gba = gba;
 		for ( int i = 0; i < 4; i++ )
-			Channels[i] = new TimerChannel( i );
+			Channels[i] = new GbaTimer( i );
 	}
 
 	public void Reset()
@@ -37,8 +37,8 @@ public class TimerController
 		c.Control = value;
 		c.Enabled = (value & 0x80) != 0;
 		c.CountUp = idx > 0 && (value & 0x04) != 0;
-		c.IrqEnable = (value & 0x40) != 0;
-		c.PrescalerIndex = value & 3;
+		c.DoIrq = (value & 0x40) != 0;
+		c.PrescaleBits = value & 3;
 
 		bool reschedule = false;
 
@@ -64,9 +64,9 @@ public class TimerController
 			c.NextOverflowCycle = long.MaxValue;
 			if ( c.Enabled && !c.CountUp )
 			{
-				int bits = PrescaleBits[c.PrescalerIndex];
+				int bits = PrescaleBits[c.PrescaleBits];
 				long tickMask = (1L << bits) - 1;
-				c.LastEventCycle = Gba.Cpu.Cycles & ~tickMask;
+				c.LastEvent = Gba.Cpu.Cycles & ~tickMask;
 				ScheduleOverflow( c );
 			}
 			RecalcGlobalEvent();
@@ -85,12 +85,12 @@ public class TimerController
 		NextGlobalEvent = min;
 	}
 
-	private void ScheduleOverflow( TimerChannel c )
+	private void ScheduleOverflow( GbaTimer c )
 	{
-		int bits = PrescaleBits[c.PrescalerIndex];
+		int bits = PrescaleBits[c.PrescaleBits];
 		long tickMask = (1L << bits) - 1;
 		long ticksToOverflow = (long)(0x10000 - c.Counter) << bits;
-		c.NextOverflowCycle = (c.LastEventCycle & ~tickMask) + ticksToOverflow;
+		c.NextOverflowCycle = (c.LastEvent & ~tickMask) + ticksToOverflow;
 	}
 
 	private void SyncCounter( int idx )
@@ -98,11 +98,11 @@ public class TimerController
 		var c = Channels[idx];
 		if ( !c.Enabled || c.CountUp ) return;
 
-		int bits = PrescaleBits[c.PrescalerIndex];
+		int bits = PrescaleBits[c.PrescaleBits];
 		long tickMask = (1L << bits) - 1;
 		long currentCycle = Gba.Cpu.Cycles & ~tickMask;
-		long ticks = (currentCycle - c.LastEventCycle) >> bits;
-		c.LastEventCycle = currentCycle;
+		long ticks = (currentCycle - c.LastEvent) >> bits;
+		c.LastEvent = currentCycle;
 
 		if ( ticks <= 0 ) return;
 
@@ -124,10 +124,10 @@ public class TimerController
 		var c = Channels[idx];
 		if ( !c.Enabled || c.CountUp ) return c.Counter;
 
-		int bits = PrescaleBits[c.PrescalerIndex];
+		int bits = PrescaleBits[c.PrescaleBits];
 		long tickMask = (1L << bits) - 1;
 		long adjustedCycle = (Gba.Cpu.Cycles - 2) & ~tickMask;
-		long ticks = (adjustedCycle - c.LastEventCycle) >> bits;
+		long ticks = (adjustedCycle - c.LastEvent) >> bits;
 
 		int result = (int)c.Counter + (int)ticks;
 
@@ -158,22 +158,22 @@ public class TimerController
 			{
 				long overflowCycle = c.NextOverflowCycle;
 				c.Counter = c.Reload;
-				c.LastEventCycle = overflowCycle;
+				c.LastEvent = overflowCycle;
 
-				int bits = PrescaleBits[c.PrescalerIndex];
+				int bits = PrescaleBits[c.PrescaleBits];
 				long ticksToOverflow = (long)(0x10000 - c.Counter) << bits;
 				if ( ticksToOverflow <= 0 ) ticksToOverflow = 1;
 				c.NextOverflowCycle = overflowCycle + ticksToOverflow;
 
-				if ( c.IrqEnable )
+				if ( c.DoIrq )
 				{
 					int late = (int)(currentCycle - overflowCycle);
-					Gba.Io.RaiseIrq( (IrqFlag)(1 << (3 + i)), late );
+					Gba.Io.RaiseIrq( (GbaIrq)(1 << (3 + i)), late );
 				}
 
 				if ( i <= 1 )
 				{
-					Gba.Apu.OnTimerOverflow( i );
+					Gba.Audio.OnTimerOverflow( i );
 				}
 
 				if ( i < 3 )
@@ -199,14 +199,14 @@ public class TimerController
 		{
 			c.Counter = c.Reload;
 
-			if ( c.IrqEnable )
+			if ( c.DoIrq )
 			{
-				Gba.Io.RaiseIrq( (IrqFlag)(1 << (3 + idx)), late );
+				Gba.Io.RaiseIrq( (GbaIrq)(1 << (3 + idx)), late );
 			}
 
 			if ( idx <= 1 )
 			{
-				Gba.Apu.OnTimerOverflow( idx );
+				Gba.Audio.OnTimerOverflow( idx );
 			}
 
 			if ( idx < 3 )
@@ -221,7 +221,7 @@ public class TimerController
 	}
 }
 
-public class TimerChannel
+public class GbaTimer
 {
 	public int Index;
 	public ushort Reload;
@@ -230,13 +230,13 @@ public class TimerChannel
 
 	public bool Enabled;
 	public bool CountUp;
-	public bool IrqEnable;
-	public int PrescalerIndex;
+	public bool DoIrq;
+	public int PrescaleBits;
 
-	public long LastEventCycle;
+	public long LastEvent;
 	public long NextOverflowCycle = long.MaxValue;
 
-	public TimerChannel( int index )
+	public GbaTimer( int index )
 	{
 		Index = index;
 	}
@@ -244,9 +244,9 @@ public class TimerChannel
 	public void Reset()
 	{
 		Reload = Counter = Control = 0;
-		Enabled = CountUp = IrqEnable = false;
-		PrescalerIndex = 0;
-		LastEventCycle = 0;
+		Enabled = CountUp = DoIrq = false;
+		PrescaleBits = 0;
+		LastEvent = 0;
 		NextOverflowCycle = long.MaxValue;
 	}
 }

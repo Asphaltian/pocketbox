@@ -1,18 +1,18 @@
 namespace sGBA;
 
-public class MemoryBus
+public class GbaMemory
 {
 	public byte[] Bios { get; set; }
-	public byte[] Ewram { get; set; }
+	public byte[] Wram { get; set; }
 	public byte[] Iwram { get; set; }
 	public byte[] PaletteRam { get; set; }
 	public byte[] Vram { get; set; }
 	public byte[] Oam { get; set; }
 	public byte[] Rom { get; set; }
 	public byte[] Sram { get; set; }
-	public ushort[] IoRegisters { get; set; }
+	public ushort[] Io { get; set; }
 
-	public GbaSystem Gba { get; }
+	public Gba Gba { get; }
 
 	public uint BiosPrefetch;
 
@@ -24,24 +24,24 @@ public class MemoryBus
 	private static readonly int[] RomWaitN = [4, 3, 2, 8];
 	private static readonly int[] RomWaitS = [2, 1, 4, 1, 8, 1];
 
-	public bool PrefetchEnabled;
+	public bool Prefetch;
 	public uint LastPrefetchedPc;
 
-	public bool DebugEnabled;
+	public bool Debug;
 	public byte[] DebugString = new byte[0x100];
 	public ushort DebugFlags;
 
-	public MemoryBus( GbaSystem gba )
+	public GbaMemory( Gba gba )
 	{
 		Gba = gba;
 		Bios = new byte[GbaConstants.BiosSize];
-		Ewram = new byte[GbaConstants.EwramSize];
+		Wram = new byte[GbaConstants.EwramSize];
 		Iwram = new byte[GbaConstants.IwramSize];
 		PaletteRam = new byte[GbaConstants.PaletteSize];
 		Vram = new byte[GbaConstants.VramSize];
 		Oam = new byte[GbaConstants.OamSize];
 		Sram = new byte[GbaConstants.SramSize];
-		IoRegisters = new ushort[GbaConstants.IoSize / 2];
+		Io = new ushort[GbaConstants.IoSize / 2];
 		Rom = [];
 		InitDefaultWaitstates();
 	}
@@ -49,15 +49,15 @@ public class MemoryBus
 	public void Reset()
 	{
 		Array.Clear( Bios );
-		Array.Clear( Ewram );
+		Array.Clear( Wram );
 		Array.Clear( Iwram );
 		Array.Clear( PaletteRam );
 		Array.Clear( Vram );
 		Array.Clear( Oam );
 		Array.Clear( Sram );
-		Array.Clear( IoRegisters );
+		Array.Clear( Io );
 		BiosPrefetch = 0;
-		DebugEnabled = false;
+		Debug = false;
 		Array.Clear( DebugString );
 		DebugFlags = 0;
 		InitDefaultWaitstates();
@@ -73,14 +73,14 @@ public class MemoryBus
 		Array.Copy( n32, WaitstatesNonseq32, 16 );
 		Array.Copy( s16, WaitstatesSeq16, 16 );
 		Array.Copy( s32, WaitstatesSeq32, 16 );
-		PrefetchEnabled = false;
+		Prefetch = false;
 		LastPrefetchedPc = 0;
 	}
 
 	public int MemoryStall( uint pc, int wait )
 	{
 		int activeRegion = (int)((pc >> 24) & 0xF);
-		if ( activeRegion < 8 || !PrefetchEnabled )
+		if ( activeRegion < 8 || !Prefetch )
 			return wait;
 
 		int previousLoads = 0;
@@ -113,9 +113,9 @@ public class MemoryBus
 		return wait;
 	}
 
-	public void UpdateWaitstates( ushort waitcnt )
+	public void AdjustWaitstates( ushort waitcnt )
 	{
-		PrefetchEnabled = (waitcnt & 0x4000) != 0;
+		Prefetch = (waitcnt & 0x4000) != 0;
 
 		int sramWait = RomWaitN[waitcnt & 3];
 		int ws0N = RomWaitN[(waitcnt >> 2) & 3];
@@ -189,7 +189,7 @@ public class MemoryBus
 		Bios[offset + 3] = (byte)(value >> 24);
 	}
 
-	public byte Read8( uint address )
+	public byte Load8( uint address )
 	{
 		int region = (int)(address >> 24);
 		switch ( region )
@@ -197,26 +197,27 @@ public class MemoryBus
 			case 0x0:
 				if ( address < GbaConstants.BiosSize )
 				{
-					if ( Gba.Cpu.R[15] < GbaConstants.BiosSize )
+					if ( Gba.Cpu.Gprs[15] < GbaConstants.BiosSize )
 					{
 						uint addr = address & 0x3FFF;
 						BiosPrefetch = ReadWordFromArray( Bios, addr & ~3u );
 						return Bios[addr];
 					}
+					GbaLog.Write( LogCategory.GBAMem, LogLevel.GameError, $"Bad BIOS Load8: 0x{address:X8}" );
 					return (byte)(BiosPrefetch >> (int)((address & 3) * 8));
 				}
-				return Gba.HleBios.HleActive
+				return Gba.Bios.HleActive
 					? (byte)0
 					: (byte)(Gba.Cpu.OpenBusPrefetch >> (int)((address & 3) * 8));
 
-			case 0x2: return Ewram[address & 0x3FFFF];
+			case 0x2: return Wram[address & 0x3FFFF];
 			case 0x3: return Iwram[address & 0x7FFF];
 			case 0x4: return ReadIO8( address );
 			case 0x5: return PaletteRam[address & 0x3FF];
 			case 0x6:
 				{
 					uint rawAddr = address & 0x1FFFF;
-					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Video.DispCnt & 7) >= 3 )
 						return 0;
 					return Vram[MapVramAddress( address )];
 				}
@@ -235,20 +236,21 @@ public class MemoryBus
 
 			case 0xE:
 			case 0xF:
-				return Gba.Save.Read8( address );
+				return Gba.Savedata.Read8( address );
 
 			default:
+				GbaLog.Write( LogCategory.GBAMem, LogLevel.GameError, $"Bad memory Load8: 0x{address:X8}" );
 				return (byte)(Gba.Cpu.OpenBusPrefetch >> (int)((address & 3) * 8));
 		}
 	}
 
-	public ushort Read16( uint address )
+	public ushort Load16( uint address )
 	{
 		int region = (int)(address >> 24);
 
 		if ( region >= 0xE )
 		{
-			byte b = Gba.Save.Read8( address );
+			byte b = Gba.Savedata.Read8( address );
 			return (ushort)(b * 0x0101);
 		}
 
@@ -258,26 +260,27 @@ public class MemoryBus
 			case 0x0:
 				if ( address < GbaConstants.BiosSize )
 				{
-					if ( Gba.Cpu.R[15] < GbaConstants.BiosSize )
+					if ( Gba.Cpu.Gprs[15] < GbaConstants.BiosSize )
 					{
 						uint addr = address & 0x3FFF;
 						BiosPrefetch = ReadWordFromArray( Bios, addr & ~3u );
 						return ReadHalfFromArray( Bios, addr );
 					}
+					GbaLog.Write( LogCategory.GBAMem, LogLevel.GameError, $"Bad BIOS Load16: 0x{address:X8}" );
 					return (ushort)(BiosPrefetch >> (int)((address & 2) * 8));
 				}
-				return Gba.HleBios.HleActive
+				return Gba.Bios.HleActive
 					? (ushort)0
 					: (ushort)(Gba.Cpu.OpenBusPrefetch >> (int)((address & 2) * 8));
 
-			case 0x2: return ReadHalfFromArray( Ewram, address & 0x3FFFF );
+			case 0x2: return ReadHalfFromArray( Wram, address & 0x3FFFF );
 			case 0x3: return ReadHalfFromArray( Iwram, address & 0x7FFF );
 			case 0x4: return ReadIO16( address );
 			case 0x5: return ReadHalfFromArray( PaletteRam, address & 0x3FF );
 			case 0x6:
 				{
 					uint rawAddr = address & 0x1FFFF;
-					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Video.DispCnt & 7) >= 3 )
 						return 0;
 					return ReadHalfFromArray( Vram, MapVramAddress( address ) );
 				}
@@ -290,34 +293,36 @@ public class MemoryBus
 			case 0xC:
 				{
 					uint romAddr = address & 0x1FFFFFF;
-					if ( Gba.Gpio.HasRtc && romAddr >= 0xC4 && romAddr <= 0xC8 && (romAddr & 1) == 0 )
-						return Gba.Gpio.ReadRegister( romAddr );
+					if ( Gba.Hardware.HasRtc && romAddr >= 0xC4 && romAddr <= 0xC8 && (romAddr & 1) == 0 )
+						return Gba.Hardware.GpioRead( romAddr );
 					if ( romAddr < (uint)Rom.Length - 1 )
 						return ReadHalfFromArray( Rom, romAddr );
 					return (ushort)(romAddr >> 1);
 				}
 			case 0xD:
 				{
-					if ( Gba.Save.Type == SaveType.Eeprom )
-						return Gba.Save.ReadEeprom();
+					if ( Gba.Savedata.Type == SavedataType.Eeprom )
+						return Gba.Savedata.ReadEEPROM();
 					uint romAddr = address & 0x1FFFFFF;
 					if ( romAddr < (uint)Rom.Length - 1 )
 						return ReadHalfFromArray( Rom, romAddr );
+					GbaLog.Write( LogCategory.GBAMem, LogLevel.GameError, $"Out of bounds ROM Load16: 0x{address:X8}" );
 					return (ushort)(romAddr >> 1);
 				}
 
 			default:
+				GbaLog.Write( LogCategory.GBAMem, LogLevel.GameError, $"Bad memory Load16: 0x{address:X8}" );
 				return (ushort)(Gba.Cpu.OpenBusPrefetch >> (int)((address & 2) * 8));
 		}
 	}
 
-	public uint Read32( uint address )
+	public uint Load32( uint address )
 	{
 		int region = (int)(address >> 24);
 
 		if ( region >= 0xE )
 		{
-			byte b = Gba.Save.Read8( address );
+			byte b = Gba.Savedata.Read8( address );
 			return (uint)(b | (b << 8) | (b << 16) | (b << 24));
 		}
 
@@ -327,24 +332,25 @@ public class MemoryBus
 			case 0x0:
 				if ( address < GbaConstants.BiosSize )
 				{
-					if ( Gba.Cpu.R[15] < GbaConstants.BiosSize )
+					if ( Gba.Cpu.Gprs[15] < GbaConstants.BiosSize )
 					{
 						uint addr = address & 0x3FFF;
 						BiosPrefetch = ReadWordFromArray( Bios, addr );
 						return BiosPrefetch;
 					}
+					GbaLog.Write( LogCategory.GBAMem, LogLevel.GameError, $"Bad BIOS Load32: 0x{address:X8}" );
 					return BiosPrefetch;
 				}
-				return Gba.HleBios.HleActive ? 0u : Gba.Cpu.OpenBusPrefetch;
+				return Gba.Bios.HleActive ? 0u : Gba.Cpu.OpenBusPrefetch;
 
-			case 0x2: return ReadWordFromArray( Ewram, address & 0x3FFFF );
+			case 0x2: return ReadWordFromArray( Wram, address & 0x3FFFF );
 			case 0x3: return ReadWordFromArray( Iwram, address & 0x7FFF );
 			case 0x4: return ReadIO32( address );
 			case 0x5: return ReadWordFromArray( PaletteRam, address & 0x3FF );
 			case 0x6:
 				{
 					uint rawAddr = address & 0x1FFFF;
-					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Video.DispCnt & 7) >= 3 )
 						return 0;
 					return ReadWordFromArray( Vram, MapVramAddress( address ) );
 				}
@@ -359,19 +365,21 @@ public class MemoryBus
 				uint romAddr = address & 0x1FFFFFF;
 				if ( romAddr < (uint)Rom.Length - 3 )
 					return ReadWordFromArray( Rom, romAddr );
+				GbaLog.Write( LogCategory.GBAMem, LogLevel.GameError, $"Out of bounds ROM Load32: 0x{address:X8}" );
 				return (romAddr >> 1) & 0xFFFF | ((romAddr >> 1) + 1) << 16;
 
 			default:
+				GbaLog.Write( LogCategory.GBAMem, LogLevel.GameError, $"Bad memory Load32: 0x{address:X8}" );
 				return Gba.Cpu.OpenBusPrefetch;
 		}
 	}
 
-	public void Write8( uint address, byte value )
+	public void Store8( uint address, byte value )
 	{
 		int region = (int)(address >> 24);
 		switch ( region )
 		{
-			case 0x2: Ewram[address & 0x3FFFF] = value; break;
+			case 0x2: Wram[address & 0x3FFFF] = value; break;
 			case 0x3: Iwram[address & 0x7FFF] = value; break;
 			case 0x4: WriteIO8( address, value ); break;
 			case 0x5:
@@ -383,7 +391,7 @@ public class MemoryBus
 				break;
 			case 0x6:
 				{
-					uint objThreshold = (uint)((Gba.Ppu.DispCnt & 7) >= 3 ? 0x14000 : 0x10000);
+					uint objThreshold = (uint)((Gba.Video.DispCnt & 7) >= 3 ? 0x14000 : 0x10000);
 					if ( (address & 0x1FFFF) >= objThreshold )
 						break;
 					uint addr = address & 0x1FFFE;
@@ -394,32 +402,32 @@ public class MemoryBus
 			case 0x7: break;
 			case 0xE:
 			case 0xF:
-				Gba.Save.Write8( address, value );
+				Gba.Savedata.Write8( address, value );
 				break;
 		}
 	}
 
-	public void Write16( uint address, ushort value )
+	public void Store16( uint address, ushort value )
 	{
 		int region = (int)(address >> 24);
 		if ( region >= 0xE )
 		{
 			byte b = (address & 1) != 0 ? (byte)(value >> 8) : (byte)value;
-			Gba.Save.Write8( address, b );
+			Gba.Savedata.Write8( address, b );
 			return;
 		}
 
 		address &= ~1u;
 		switch ( region )
 		{
-			case 0x2: WriteHalfToArray( Ewram, address & 0x3FFFF, value ); break;
+			case 0x2: WriteHalfToArray( Wram, address & 0x3FFFF, value ); break;
 			case 0x3: WriteHalfToArray( Iwram, address & 0x7FFF, value ); break;
 			case 0x4: WriteIO16( address, value ); break;
 			case 0x5: WriteHalfToArray( PaletteRam, address & 0x3FF, value ); break;
 			case 0x6:
 				{
 					uint rawAddr = address & 0x1FFFF;
-					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Video.DispCnt & 7) >= 3 )
 						break;
 					WriteHalfToArray( Vram, MapVramAddress( address ), value );
 				}
@@ -429,37 +437,37 @@ public class MemoryBus
 			case 0x9:
 				{
 					uint romAddr = address & 0x1FFFFFF;
-					if ( Gba.Gpio.HasRtc && romAddr >= 0xC4 && romAddr <= 0xC8 && (romAddr & 1) == 0 )
-						Gba.Gpio.WriteRegister( romAddr, value );
+					if ( Gba.Hardware.HasRtc && romAddr >= 0xC4 && romAddr <= 0xC8 && (romAddr & 1) == 0 )
+						Gba.Hardware.GpioWrite( romAddr, value );
 					break;
 				}
 			case 0xD:
-				if ( Gba.Save.Type == SaveType.Eeprom )
-					Gba.Save.WriteEeprom( value, 1 );
+				if ( Gba.Savedata.Type == SavedataType.Eeprom )
+					Gba.Savedata.WriteEEPROM( value, 1 );
 				break;
 		}
 	}
 
-	public void Write32( uint address, uint value )
+	public void Store32( uint address, uint value )
 	{
 		int region = (int)(address >> 24);
 		if ( region >= 0xE )
 		{
-			Gba.Save.Write8( address, (byte)(value >> (int)(8 * (address & 3))) );
+			Gba.Savedata.Write8( address, (byte)(value >> (int)(8 * (address & 3))) );
 			return;
 		}
 
 		address &= ~3u;
 		switch ( region )
 		{
-			case 0x2: WriteWordToArray( Ewram, address & 0x3FFFF, value ); break;
+			case 0x2: WriteWordToArray( Wram, address & 0x3FFFF, value ); break;
 			case 0x3: WriteWordToArray( Iwram, address & 0x7FFF, value ); break;
 			case 0x4: WriteIO32( address, value ); break;
 			case 0x5: WriteWordToArray( PaletteRam, address & 0x3FF, value ); break;
 			case 0x6:
 				{
 					uint rawAddr = address & 0x1FFFF;
-					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Ppu.DispCnt & 7) >= 3 )
+					if ( (rawAddr & 0x1C000) == 0x18000 && (Gba.Video.DispCnt & 7) >= 3 )
 						break;
 					WriteWordToArray( Vram, MapVramAddress( address ), value );
 				}
@@ -473,7 +481,7 @@ public class MemoryBus
 		uint offset = address & 0x00FFFFFF;
 		if ( offset >= 0xFFF600 && offset < 0xFFF700 )
 		{
-			if ( DebugEnabled )
+			if ( Debug )
 				return DebugString[offset - 0xFFF600];
 			return 0;
 		}
@@ -487,7 +495,7 @@ public class MemoryBus
 		uint offset = address & 0x00FFFFFF;
 		if ( offset >= 0xFFF600 )
 		{
-			if ( offset >= 0xFFF600 && offset < 0xFFF700 && DebugEnabled )
+			if ( offset >= 0xFFF600 && offset < 0xFFF700 && Debug )
 			{
 				uint idx = offset - 0xFFF600;
 				if ( idx + 1 < 0x100 )
@@ -495,7 +503,7 @@ public class MemoryBus
 				return 0;
 			}
 			if ( offset == 0xFFF700 ) return DebugFlags;
-			if ( offset == 0xFFF780 ) return DebugEnabled ? (ushort)0x1DEA : (ushort)0;
+			if ( offset == 0xFFF780 ) return Debug ? (ushort)0x1DEA : (ushort)0;
 			return 0;
 		}
 		if ( offset >= 0x400 ) return (ushort)Gba.Cpu.OpenBusPrefetch;
@@ -522,7 +530,7 @@ public class MemoryBus
 		uint offset = address & 0x00FFFFFF;
 		if ( offset >= 0xFFF600 && offset < 0xFFF700 )
 		{
-			if ( DebugEnabled )
+			if ( Debug )
 				DebugString[offset - 0xFFF600] = value;
 			return;
 		}
@@ -535,7 +543,7 @@ public class MemoryBus
 		uint offset = address & 0x00FFFFFF;
 		if ( offset >= 0xFFF600 )
 		{
-			if ( offset >= 0xFFF600 && offset < 0xFFF700 && DebugEnabled )
+			if ( offset >= 0xFFF600 && offset < 0xFFF700 && Debug )
 			{
 				uint idx = offset - 0xFFF600;
 				if ( idx + 1 < 0x100 )
@@ -547,13 +555,13 @@ public class MemoryBus
 			}
 			if ( offset == 0xFFF700 )
 			{
-				if ( DebugEnabled )
+				if ( Debug )
 					HandleDebugFlags( value );
 				return;
 			}
 			if ( offset == 0xFFF780 )
 			{
-				DebugEnabled = value == 0xC0DE;
+				Debug = value == 0xC0DE;
 				return;
 			}
 			return;
@@ -567,7 +575,7 @@ public class MemoryBus
 		uint offset = address & 0x00FFFFFF;
 		if ( offset >= 0xFFF600 )
 		{
-			if ( offset >= 0xFFF600 && offset < 0xFFF700 && DebugEnabled )
+			if ( offset >= 0xFFF600 && offset < 0xFFF700 && Debug )
 			{
 				uint idx = offset - 0xFFF600;
 				if ( idx + 3 < 0x100 )
@@ -594,7 +602,7 @@ public class MemoryBus
 		bool send = (flags & 0x100) != 0;
 		if ( !send ) return;
 
-		int level = flags & 0x7;
+		int level = (1 << (flags & 0x7)) & 0x1F;
 
 		int len = 0;
 		while ( len < 0x100 && DebugString[len] != 0 ) len++;
@@ -602,19 +610,7 @@ public class MemoryBus
 		Array.Clear( DebugString );
 		DebugFlags = (ushort)(flags & ~0x100);
 
-		switch ( level )
-		{
-			case 0:
-			case 1:
-				Log.Error( msg );
-				break;
-			case 2:
-				Log.Warning( msg );
-				break;
-			default:
-				Log.Info( msg );
-				break;
-		}
+		GbaLog.Write( LogCategory.GBADebug, (LogLevel)level, msg );
 	}
 
 	public static uint MapVramAddress( uint address )

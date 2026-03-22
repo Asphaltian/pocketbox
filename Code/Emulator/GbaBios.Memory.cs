@@ -1,6 +1,6 @@
 namespace sGBA;
 
-public partial class HleBios
+public partial class GbaBios
 {
 	private void CpuSet()
 	{
@@ -16,11 +16,11 @@ public partial class HleBios
 
 		if ( is32 )
 		{
-			uint fillVal = fill ? Gba.Bus.Read32( src ) : 0;
+			uint fillVal = fill ? Gba.Memory.Load32( src ) : 0;
 			for ( int i = 0; i < count; i++ )
 			{
-				uint val = fill ? fillVal : Gba.Bus.Read32( src );
-				Gba.Bus.Write32( dst, val );
+				uint val = fill ? fillVal : Gba.Memory.Load32( src );
+				Gba.Memory.Store32( dst, val );
 				if ( !fill ) src += 4;
 				dst += 4;
 			}
@@ -29,10 +29,10 @@ public partial class HleBios
 		{
 			if ( fill )
 			{
-				ushort fillVal = Gba.Bus.Read16( src & ~1u );
+				ushort fillVal = Gba.Memory.Load16( src & ~1u );
 				for ( int i = 0; i < count; i++ )
 				{
-					Gba.Bus.Write16( dst, fillVal );
+					Gba.Memory.Store16( dst, fillVal );
 					dst += 2;
 				}
 			}
@@ -42,10 +42,10 @@ public partial class HleBios
 				{
 					ushort val;
 					if ( (src & 1) != 0 )
-						val = Gba.Bus.Read8( src );
+						val = Gba.Memory.Load8( src );
 					else
-						val = Gba.Bus.Read16( src );
-					Gba.Bus.Write16( dst, val );
+						val = Gba.Memory.Load16( src );
+					Gba.Memory.Store16( dst, val );
 					src += 2;
 					dst += 2;
 				}
@@ -65,11 +65,11 @@ public partial class HleBios
 		count = (count + 7) & ~7;
 		bool fill = (control & (1 << 24)) != 0;
 
-		uint fillVal = fill ? Gba.Bus.Read32( src ) : 0;
+		uint fillVal = fill ? Gba.Memory.Load32( src ) : 0;
 		for ( int i = 0; i < count; i++ )
 		{
-			uint val = fill ? fillVal : Gba.Bus.Read32( src );
-			Gba.Bus.Write32( dst, val );
+			uint val = fill ? fillVal : Gba.Memory.Load32( src );
+			Gba.Memory.Store32( dst, val );
 			if ( !fill ) src += 4;
 			dst += 4;
 		}
@@ -79,10 +79,10 @@ public partial class HleBios
 		int iterations = count / 8;
 		if ( iterations > 0 )
 		{
-			int ldmCost = 1 + 1 + Gba.Bus.WaitstatesNonseq32[srcRegion]
-				+ 7 * (1 + Gba.Bus.WaitstatesSeq32[srcRegion]) + 1;
-			int stmCost = 1 + 1 + Gba.Bus.WaitstatesNonseq32[dstRegion]
-				+ 7 * (1 + Gba.Bus.WaitstatesSeq32[dstRegion]);
+			int ldmCost = 1 + 1 + Gba.Memory.WaitstatesNonseq32[srcRegion]
+				+ 7 * (1 + Gba.Memory.WaitstatesSeq32[srcRegion]) + 1;
+			int stmCost = 1 + 1 + Gba.Memory.WaitstatesNonseq32[dstRegion]
+				+ 7 * (1 + Gba.Memory.WaitstatesSeq32[dstRegion]);
 
 			int perIterTaken = (fill ? 0 : ldmCost) + stmCost + 4;
 			int lastIter = (fill ? 0 : ldmCost) + stmCost + 2;
@@ -99,13 +99,13 @@ public partial class HleBios
 
 		for ( int i = 0; i < count; i++ )
 		{
-			float ox = (int)Gba.Bus.Read32( src ) / 256.0f;
-			float oy = (int)Gba.Bus.Read32( src + 4 ) / 256.0f;
-			short cx = (short)Gba.Bus.Read16( src + 8 );
-			short cy = (short)Gba.Bus.Read16( src + 10 );
-			float sx = (short)Gba.Bus.Read16( src + 12 ) / 256.0f;
-			float sy = (short)Gba.Bus.Read16( src + 14 ) / 256.0f;
-			double theta = (Gba.Bus.Read16( src + 16 ) >> 8) / 128.0 * Math.PI;
+			float ox = (int)Gba.Memory.Load32( src ) / 256.0f;
+			float oy = (int)Gba.Memory.Load32( src + 4 ) / 256.0f;
+			short cx = (short)Gba.Memory.Load16( src + 8 );
+			short cy = (short)Gba.Memory.Load16( src + 10 );
+			float sx = (short)Gba.Memory.Load16( src + 12 ) / 256.0f;
+			float sy = (short)Gba.Memory.Load16( src + 14 ) / 256.0f;
+			double theta = (Gba.Memory.Load16( src + 16 ) >> 8) / 128.0 * Math.PI;
 
 			float cosA = (float)Math.Cos( theta );
 			float sinA = (float)Math.Sin( theta );
@@ -118,12 +118,12 @@ public partial class HleBios
 			float rx = ox - (a * cx + b * cy);
 			float ry = oy - (c * cx + d * cy);
 
-			Gba.Bus.Write16( dst + 0, (ushort)(short)(a * 256) );
-			Gba.Bus.Write16( dst + 2, (ushort)(short)(b * 256) );
-			Gba.Bus.Write16( dst + 4, (ushort)(short)(c * 256) );
-			Gba.Bus.Write16( dst + 6, (ushort)(short)(d * 256) );
-			Gba.Bus.Write32( dst + 8, (uint)(int)(rx * 256) );
-			Gba.Bus.Write32( dst + 12, (uint)(int)(ry * 256) );
+			Gba.Memory.Store16( dst + 0, (ushort)(short)(a * 256) );
+			Gba.Memory.Store16( dst + 2, (ushort)(short)(b * 256) );
+			Gba.Memory.Store16( dst + 4, (ushort)(short)(c * 256) );
+			Gba.Memory.Store16( dst + 6, (ushort)(short)(d * 256) );
+			Gba.Memory.Store32( dst + 8, (uint)(int)(rx * 256) );
+			Gba.Memory.Store32( dst + 12, (uint)(int)(ry * 256) );
 
 			src += 20;
 			dst += 16;
@@ -139,9 +139,9 @@ public partial class HleBios
 
 		for ( int i = 0; i < count; i++ )
 		{
-			short sx = (short)Gba.Bus.Read16( src );
-			short sy = (short)Gba.Bus.Read16( src + 2 );
-			ushort angle = Gba.Bus.Read16( src + 4 );
+			short sx = (short)Gba.Memory.Load16( src );
+			short sy = (short)Gba.Memory.Load16( src + 2 );
+			ushort angle = Gba.Memory.Load16( src + 4 );
 
 			double theta = (angle >> 8) / 128.0 * Math.PI;
 			double cosA = Math.Cos( theta );
@@ -152,10 +152,10 @@ public partial class HleBios
 			short pc = (short)(sinA * sy);
 			short pd = (short)(cosA * sy);
 
-			Gba.Bus.Write16( dst + (uint)(dstStride * 0), (ushort)pa );
-			Gba.Bus.Write16( dst + (uint)(dstStride * 1), (ushort)pb );
-			Gba.Bus.Write16( dst + (uint)(dstStride * 2), (ushort)pc );
-			Gba.Bus.Write16( dst + (uint)(dstStride * 3), (ushort)pd );
+			Gba.Memory.Store16( dst + (uint)(dstStride * 0), (ushort)pa );
+			Gba.Memory.Store16( dst + (uint)(dstStride * 1), (ushort)pb );
+			Gba.Memory.Store16( dst + (uint)(dstStride * 2), (ushort)pc );
+			Gba.Memory.Store16( dst + (uint)(dstStride * 3), (ushort)pd );
 
 			src += 8;
 			dst += (uint)(dstStride * 4);
@@ -168,9 +168,9 @@ public partial class HleBios
 		uint dst = Gba.Cpu.Registers[1];
 		uint info = Gba.Cpu.Registers[2];
 
-		ushort srcLen = Gba.Bus.Read16( info );
-		byte srcBpp = Gba.Bus.Read8( info + 2 );
-		byte dstBpp = Gba.Bus.Read8( info + 3 );
+		ushort srcLen = Gba.Memory.Load16( info );
+		byte srcBpp = Gba.Memory.Load8( info + 2 );
+		byte dstBpp = Gba.Memory.Load8( info + 3 );
 
 		switch ( srcBpp )
 		{
@@ -183,7 +183,7 @@ public partial class HleBios
 			default: return;
 		}
 
-		uint dataOffset = Gba.Bus.Read32( info + 4 );
+		uint dataOffset = Gba.Memory.Load32( info + 4 );
 		bool zeroFlag = (dataOffset & 0x80000000) != 0;
 		dataOffset &= 0x7FFFFFFF;
 
@@ -197,7 +197,7 @@ public partial class HleBios
 		{
 			if ( bitsRemaining == 0 )
 			{
-				inByte = Gba.Bus.Read8( src++ );
+				inByte = Gba.Memory.Load8( src++ );
 				bitsRemaining = 8;
 				srcLen--;
 			}
@@ -213,7 +213,7 @@ public partial class HleBios
 
 			if ( bitsInBuffer == 32 )
 			{
-				Gba.Bus.Write32( dst, buffer );
+				Gba.Memory.Store32( dst, buffer );
 				dst += 4;
 				buffer = 0;
 				bitsInBuffer = 0;

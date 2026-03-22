@@ -1,21 +1,20 @@
-﻿using System.IO;
-using System.Runtime.CompilerServices;
+using System.IO;
 
 namespace sGBA;
 
-public partial class Arm7Cpu
+public partial class ArmCore
 {
-	public uint[] R = new uint[16];
-	public uint[] Registers => R;
+	public uint[] Gprs = new uint[16];
+	public uint[] Registers => Gprs;
 
 	public bool FlagN, FlagZ, FlagC, FlagV;
 	public bool IrqDisable = true;
 	public bool FiqDisable = true;
 	public bool ThumbMode;
-	public CpuMode Mode = CpuMode.System;
+	public PrivilegeMode PrivilegeMode = PrivilegeMode.System;
 
-	private readonly uint[][] _bankedRegs = new uint[6][];
-	private readonly uint[] _bankedSpsr = new uint[6];
+	private readonly uint[][] _bankedRegisters = new uint[6][];
+	private readonly uint[] _bankedSPSRs = new uint[6];
 	private readonly uint[] _fiqRegsHi = new uint[5];
 	private readonly uint[] _usrRegsHi = new uint[5];
 
@@ -37,59 +36,59 @@ public partial class Arm7Cpu
 	public uint[] CrashRegs;
 	public bool CrashThumb;
 
-	public uint[] SpsrBank => _bankedSpsr;
+	public uint[] BankedSPSRs => _bankedSPSRs;
 
-	private uint _pipeline0;
-	private uint _pipeline1;
-	private bool _pipelineFlushed = true;
+	private uint _prefetch0;
+	private uint _prefetch1;
+	private bool _prefetchFlushed = true;
 
-	public GbaSystem Gba { get; }
-	private readonly MemoryBus Bus;
+	public Gba Gba { get; }
+	private readonly GbaMemory Memory;
 
-	public Arm7Cpu( GbaSystem gba )
+	public ArmCore( Gba gba )
 	{
 		Gba = gba;
-		Bus = gba.Bus;
+		Memory = gba.Memory;
 		for ( int i = 0; i < 6; i++ )
-			_bankedRegs[i] = new uint[2];
+			_bankedRegisters[i] = new uint[2];
 	}
 
 	public void Reset()
 	{
-		Array.Clear( R );
+		Array.Clear( Gprs );
 		FlagN = FlagZ = FlagC = FlagV = false;
 		IrqDisable = true;
 		FiqDisable = true;
 		ThumbMode = false;
-		Mode = CpuMode.System;
+		PrivilegeMode = PrivilegeMode.System;
 		Halted = false;
 		IrqPending = false;
 		InIntrWait = false;
 		IntrWaitFlags = 0;
-		_pipelineFlushed = true;
+		_prefetchFlushed = true;
 		Cycles = 0;
 
 		for ( int i = 0; i < 6; i++ )
 		{
-			_bankedRegs[i][0] = 0;
-			_bankedRegs[i][1] = 0;
-			_bankedSpsr[i] = 0;
+			_bankedRegisters[i][0] = 0;
+			_bankedRegisters[i][1] = 0;
+			_bankedSPSRs[i] = 0;
 		}
 	}
 
 	public void SkipBios()
 	{
-		SwitchMode( CpuMode.IRQ );
-		R[13] = GbaConstants.SpIrq;
-		SwitchMode( CpuMode.Supervisor );
-		R[13] = GbaConstants.SpSvc;
-		SwitchMode( CpuMode.System );
-		R[13] = GbaConstants.SpSys;
+		SetPrivilegeMode( PrivilegeMode.IRQ );
+		Gprs[13] = GbaConstants.SpBaseIrq;
+		SetPrivilegeMode( PrivilegeMode.Supervisor );
+		Gprs[13] = GbaConstants.SpBaseSupervisor;
+		SetPrivilegeMode( PrivilegeMode.System );
+		Gprs[13] = GbaConstants.SpBaseSystem;
 
 		IrqDisable = false;
 		FiqDisable = false;
-		R[15] = 0x08000000;
-		_pipelineFlushed = true;
+		Gprs[15] = 0x08000000;
+		_prefetchFlushed = true;
 	}
 
 	public void Run( long targetCycles )
@@ -104,7 +103,7 @@ public partial class Arm7Cpu
 			return;
 
 		var timers = Gba.Timers;
-		var apu = Gba.Apu;
+		var apu = Gba.Audio;
 		var io = Gba.Io;
 		var dma = Gba.Dma;
 
@@ -112,10 +111,10 @@ public partial class Arm7Cpu
 		{
 			long cyclesBefore = Cycles;
 
-			if ( _pipelineFlushed )
+			if ( _prefetchFlushed )
 			{
 				FlushPipeline();
-				_pipelineFlushed = false;
+				_prefetchFlushed = false;
 			}
 
 			if ( IrqPending && !IrqDisable )
@@ -123,7 +122,7 @@ public partial class Arm7Cpu
 				RaiseIrq();
 				IrqPending = false;
 				FlushPipeline();
-				_pipelineFlushed = false;
+				_prefetchFlushed = false;
 			}
 
 			if ( InIntrWait && !Halted && !IrqDisable && !InIrqContext )
@@ -132,7 +131,7 @@ public partial class Arm7Cpu
 				return;
 			}
 
-			uint instrAddr = ThumbMode ? R[15] - 4 : R[15] - 8;
+			uint instrAddr = ThumbMode ? Gprs[15] - 4 : Gprs[15] - 8;
 
 			if ( !IsExecutableAddress( instrAddr ) )
 			{
@@ -142,7 +141,7 @@ public partial class Arm7Cpu
 					CrashPc = instrAddr;
 					CrashCpsr = GetCpsrRaw();
 					CrashRegs = new uint[16];
-					Array.Copy( R, CrashRegs, 16 );
+					Array.Copy( Gprs, CrashRegs, 16 );
 					CrashThumb = ThumbMode;
 				}
 				Cycles = targetCycles;
@@ -178,52 +177,52 @@ public partial class Arm7Cpu
 	{
 		if ( ThumbMode )
 		{
-			R[15] &= ~1u;
-			_pipeline0 = Bus.Read16( R[15] );
-			R[15] += 2;
-			_pipeline1 = Bus.Read16( R[15] );
-			R[15] += 2;
+			Gprs[15] &= ~1u;
+			_prefetch0 = Memory.Load16( Gprs[15] );
+			Gprs[15] += 2;
+			_prefetch1 = Memory.Load16( Gprs[15] );
+			Gprs[15] += 2;
 		}
 		else
 		{
-			R[15] &= ~3u;
-			_pipeline0 = Bus.Read32( R[15] );
-			R[15] += 4;
-			_pipeline1 = Bus.Read32( R[15] );
-			R[15] += 4;
+			Gprs[15] &= ~3u;
+			_prefetch0 = Memory.Load32( Gprs[15] );
+			Gprs[15] += 4;
+			_prefetch1 = Memory.Load32( Gprs[15] );
+			Gprs[15] += 4;
 		}
 
-		int region = (int)((R[15] >> 24) & 0xF);
+		int region = (int)((Gprs[15] >> 24) & 0xF);
 		if ( ThumbMode )
-			Cycles += 2 + Bus.WaitstatesNonseq16[region] + Bus.WaitstatesSeq16[region];
+			Cycles += 2 + Memory.WaitstatesNonseq16[region] + Memory.WaitstatesSeq16[region];
 		else
-			Cycles += 2 + Bus.WaitstatesNonseq32[region] + Bus.WaitstatesSeq32[region];
+			Cycles += 2 + Memory.WaitstatesNonseq32[region] + Memory.WaitstatesSeq32[region];
 	}
 
 	public void SerializePipeline( BinaryWriter w )
 	{
-		w.Write( _pipelineFlushed );
-		w.Write( _pipeline0 );
-		w.Write( _pipeline1 );
+		w.Write( _prefetchFlushed );
+		w.Write( _prefetch0 );
+		w.Write( _prefetch1 );
 	}
 
 	public void DeserializePipeline( BinaryReader r )
 	{
-		_pipelineFlushed = r.ReadBoolean();
-		_pipeline0 = r.ReadUInt32();
-		_pipeline1 = r.ReadUInt32();
+		_prefetchFlushed = r.ReadBoolean();
+		_prefetch0 = r.ReadUInt32();
+		_prefetch1 = r.ReadUInt32();
 	}
 
 	public void RaiseIrq()
 	{
 		uint savedCpsr = GetCpsrRaw();
-		SwitchMode( CpuMode.IRQ );
+		SetPrivilegeMode( PrivilegeMode.IRQ );
 		SetSpsr( savedCpsr );
-		R[14] = R[15] - (ThumbMode ? 0u : 4u);
+		Gprs[14] = Gprs[15] - (ThumbMode ? 0u : 4u);
 		IrqDisable = true;
 		ThumbMode = false;
-		R[15] = GbaConstants.VectorIrq;
-		_pipelineFlushed = true;
+		Gprs[15] = GbaConstants.BaseIrq;
+		_prefetchFlushed = true;
 		Halted = false;
 		if ( InIntrWait )
 			InIrqContext = true;
@@ -239,7 +238,7 @@ public partial class Arm7Cpu
 		if ( IrqDisable ) cpsr |= 0x80;
 		if ( FiqDisable ) cpsr |= 0x40;
 		if ( ThumbMode ) cpsr |= 0x20;
-		cpsr |= (uint)Mode;
+		cpsr |= (uint)PrivilegeMode;
 		return cpsr;
 	}
 
@@ -254,98 +253,98 @@ public partial class Arm7Cpu
 		FiqDisable = (cpsr & 0x40) != 0;
 		ThumbMode = (cpsr & 0x20) != 0;
 
-		CpuMode newMode = (CpuMode)(cpsr & 0x1F);
-		if ( newMode != Mode && IsValidMode( newMode ) )
-			SwitchMode( newMode );
+		PrivilegeMode newMode = (PrivilegeMode)(cpsr & 0x1F);
+		if ( newMode != PrivilegeMode && IsValidMode( newMode ) )
+			SetPrivilegeMode( newMode );
 
 		if ( wasIrqDisabled && !IrqDisable )
-			Gba.Io.CheckIrq();
+			Gba.Io.TestIrq();
 	}
 
-	private static bool IsValidMode( CpuMode mode )
+	private static bool IsValidMode( PrivilegeMode mode )
 	{
-		return mode == CpuMode.User || mode == CpuMode.FIQ || mode == CpuMode.IRQ ||
-			   mode == CpuMode.Supervisor || mode == CpuMode.Abort ||
-			   mode == CpuMode.Undefined || mode == CpuMode.System;
+		return mode == PrivilegeMode.User || mode == PrivilegeMode.FIQ || mode == PrivilegeMode.IRQ ||
+			   mode == PrivilegeMode.Supervisor || mode == PrivilegeMode.Abort ||
+			   mode == PrivilegeMode.Undefined || mode == PrivilegeMode.System;
 	}
 
-	public void SwitchMode( CpuMode newMode )
+	public void SetPrivilegeMode( PrivilegeMode newMode )
 	{
-		int oldBank = GetBankIndex( Mode );
+		int oldBank = GetBankIndex( PrivilegeMode );
 		int newBank = GetBankIndex( newMode );
 
 		if ( oldBank != newBank )
 		{
-			_bankedRegs[oldBank][0] = R[13];
-			_bankedRegs[oldBank][1] = R[14];
+			_bankedRegisters[oldBank][0] = Gprs[13];
+			_bankedRegisters[oldBank][1] = Gprs[14];
 
-			if ( Mode == CpuMode.FIQ )
+			if ( PrivilegeMode == PrivilegeMode.FIQ )
 			{
-				for ( int i = 0; i < 5; i++ ) { _fiqRegsHi[i] = R[8 + i]; R[8 + i] = _usrRegsHi[i]; }
+				for ( int i = 0; i < 5; i++ ) { _fiqRegsHi[i] = Gprs[8 + i]; Gprs[8 + i] = _usrRegsHi[i]; }
 			}
 
-			R[13] = _bankedRegs[newBank][0];
-			R[14] = _bankedRegs[newBank][1];
+			Gprs[13] = _bankedRegisters[newBank][0];
+			Gprs[14] = _bankedRegisters[newBank][1];
 
-			if ( newMode == CpuMode.FIQ )
+			if ( newMode == PrivilegeMode.FIQ )
 			{
-				for ( int i = 0; i < 5; i++ ) { _usrRegsHi[i] = R[8 + i]; R[8 + i] = _fiqRegsHi[i]; }
+				for ( int i = 0; i < 5; i++ ) { _usrRegsHi[i] = Gprs[8 + i]; Gprs[8 + i] = _fiqRegsHi[i]; }
 			}
 		}
 
-		Mode = newMode;
+		PrivilegeMode = newMode;
 	}
 
-	private int GetBankIndex( CpuMode mode )
+	private int GetBankIndex( PrivilegeMode mode )
 	{
 		switch ( mode )
 		{
-			case CpuMode.FIQ: return 0;
-			case CpuMode.IRQ: return 1;
-			case CpuMode.Supervisor: return 2;
-			case CpuMode.Abort: return 3;
-			case CpuMode.Undefined: return 4;
+			case PrivilegeMode.FIQ: return 0;
+			case PrivilegeMode.IRQ: return 1;
+			case PrivilegeMode.Supervisor: return 2;
+			case PrivilegeMode.Abort: return 3;
+			case PrivilegeMode.Undefined: return 4;
 			default: return 5;
 		}
 	}
 
 	public uint GetSpsr()
 	{
-		if ( Mode == CpuMode.User || Mode == CpuMode.System )
+		if ( PrivilegeMode == PrivilegeMode.User || PrivilegeMode == PrivilegeMode.System )
 			return GetCpsrRaw();
-		int bank = GetBankIndex( Mode );
-		return _bankedSpsr[bank];
+		int bank = GetBankIndex( PrivilegeMode );
+		return _bankedSPSRs[bank];
 	}
 
 	public void SetSpsr( uint value )
 	{
-		int bank = GetBankIndex( Mode );
-		_bankedSpsr[bank] = value;
+		int bank = GetBankIndex( PrivilegeMode );
+		_bankedSPSRs[bank] = value;
 	}
 
 	private uint GetUserReg( int reg )
 	{
-		if ( Mode == CpuMode.User || Mode == CpuMode.System )
-			return R[reg];
+		if ( PrivilegeMode == PrivilegeMode.User || PrivilegeMode == PrivilegeMode.System )
+			return Gprs[reg];
 
-		if ( reg >= 8 && reg <= 12 && Mode == CpuMode.FIQ )
+		if ( reg >= 8 && reg <= 12 && PrivilegeMode == PrivilegeMode.FIQ )
 			return _usrRegsHi[reg - 8];
 
 		if ( reg == 13 || reg == 14 )
-			return _bankedRegs[5][reg - 13];
+			return _bankedRegisters[5][reg - 13];
 
-		return R[reg];
+		return Gprs[reg];
 	}
 
 	private void SetUserReg( int reg, uint value )
 	{
-		if ( Mode == CpuMode.User || Mode == CpuMode.System )
+		if ( PrivilegeMode == PrivilegeMode.User || PrivilegeMode == PrivilegeMode.System )
 		{
-			R[reg] = value;
+			Gprs[reg] = value;
 			return;
 		}
 
-		if ( reg >= 8 && reg <= 12 && Mode == CpuMode.FIQ )
+		if ( reg >= 8 && reg <= 12 && PrivilegeMode == PrivilegeMode.FIQ )
 		{
 			_usrRegsHi[reg - 8] = value;
 			return;
@@ -353,11 +352,11 @@ public partial class Arm7Cpu
 
 		if ( reg == 13 || reg == 14 )
 		{
-			_bankedRegs[5][reg - 13] = value;
+			_bankedRegisters[5][reg - 13] = value;
 			return;
 		}
 
-		R[reg] = value;
+		Gprs[reg] = value;
 	}
 
 	private void SetLogicFlags( uint result, bool carry )
@@ -435,7 +434,7 @@ public partial class Arm7Cpu
 
 	private uint ReadWordRotated( uint address )
 	{
-		uint val = Bus.Read32( address );
+		uint val = Memory.Load32( address );
 		int rot = (int)(address & 3) * 8;
 		if ( rot != 0 ) val = Ror( val, rot );
 		return val;
@@ -472,7 +471,7 @@ public partial class Arm7Cpu
 	}
 }
 
-public enum CpuMode : uint
+public enum PrivilegeMode : uint
 {
 	User = 0x10,
 	FIQ = 0x11,

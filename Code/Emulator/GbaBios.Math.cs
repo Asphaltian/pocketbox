@@ -1,6 +1,6 @@
 namespace sGBA;
 
-public partial class HleBios
+public partial class GbaBios
 {
 	private void Div()
 	{

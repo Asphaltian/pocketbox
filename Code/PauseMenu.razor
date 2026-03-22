@@ -19,7 +19,7 @@
 			</div>
 			<div class="menu-divider @(ShowSlots ? "visible" : "")"></div>
 			<div class="menu-right @(ShowSlots ? "visible" : "")">
-				@for ( int i = 1; i <= SaveState.SlotCount; i++ )
+				@for ( int i = 1; i <= GbaSerialize.SlotCount; i++ )
 				{
 					var slot = i;
 					<div class="slot @(slot == HighlightedSlot && ShowSlots ? "highlighted" : "")"
@@ -100,9 +100,9 @@
 	private int HighlightedSlot { get; set; } = 1;
 	private bool ShowSlots => HasSlotPanel;
 
-	private readonly Texture[] SlotTextures = new Texture[SaveState.SlotCount];
-	private readonly bool[] SlotOccupied = new bool[SaveState.SlotCount];
-	private readonly DateTime?[] SlotTimestamps = new DateTime?[SaveState.SlotCount];
+	private readonly Texture[] SlotTextures = new Texture[GbaSerialize.SlotCount];
+	private readonly bool[] SlotOccupied = new bool[GbaSerialize.SlotCount];
+	private readonly DateTime?[] SlotTimestamps = new DateTime?[GbaSerialize.SlotCount];
 	private int _slotVersion;
 
 	private bool ShowConfirmDialog { get; set; }
@@ -256,7 +256,7 @@
 		Sound.Play( "ui.button.over" );
 
 		if ( InSlotPanel )
-			HighlightedSlot = HighlightedSlot <= 1 ? SaveState.SlotCount : HighlightedSlot - 1;
+			HighlightedSlot = HighlightedSlot <= 1 ? GbaSerialize.SlotCount : HighlightedSlot - 1;
 		else
 			SelectedIndex = SelectedIndex <= 0 ? MenuItems.Length - 1 : SelectedIndex - 1;
 	}
@@ -267,7 +267,7 @@
 		Sound.Play( "ui.button.over" );
 
 		if ( InSlotPanel )
-			HighlightedSlot = HighlightedSlot >= SaveState.SlotCount ? 1 : HighlightedSlot + 1;
+			HighlightedSlot = HighlightedSlot >= GbaSerialize.SlotCount ? 1 : HighlightedSlot + 1;
 		else
 			SelectedIndex = SelectedIndex >= MenuItems.Length - 1 ? 0 : SelectedIndex + 1;
 	}
@@ -431,7 +431,7 @@
 		var emu = EmulatorComponent.Current;
 		if ( !emu.IsValid() ) return;
 
-		for ( int i = 0; i < SaveState.SlotCount; i++ )
+		for ( int i = 0; i < GbaSerialize.SlotCount; i++ )
 		{
 			var path = emu.GetStatePath( i + 1 );
 
@@ -443,9 +443,9 @@
 
 			var data = FileSystem.Data.ReadAllBytes( path ).ToArray();
 			SlotOccupied[i] = true;
-			SlotTimestamps[i] = SaveState.ReadTimestamp( data );
+			SlotTimestamps[i] = GbaSerialize.ReadTimestamp( data );
 
-			var screenshot = SaveState.ReadScreenshot( data );
+			var screenshot = GbaSerialize.ReadScreenshot( data );
 			if ( screenshot == null ) continue;
 
 			if ( SlotTextures[i] == null )

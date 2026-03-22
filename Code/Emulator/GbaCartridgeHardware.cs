@@ -2,9 +2,9 @@ using System.IO;
 
 namespace sGBA;
 
-public class GpioController
+public class GbaCartridgeHardware
 {
-	public GbaSystem Gba { get; }
+	public Gba Gba { get; }
 	public bool HasRtc { get; set; }
 
 	private byte _writeLatch;
@@ -24,7 +24,7 @@ public class GpioController
 
 	private static readonly int[] RtcBytes = [0, 0, 7, 0, 1, 0, 3, 0];
 
-	public GpioController( GbaSystem gba )
+	public GbaCartridgeHardware( Gba gba )
 	{
 		Gba = gba;
 	}
@@ -47,7 +47,7 @@ public class GpioController
 		Array.Clear( _rtcTime );
 	}
 
-	public void WriteRegister( uint address, ushort value )
+	public void GpioWrite( uint address, ushort value )
 	{
 		uint reg = address & 0xFF;
 
@@ -75,7 +75,7 @@ public class GpioController
 		UpdateRomMirror();
 	}
 
-	public ushort ReadRegister( uint address )
+	public ushort GpioRead( uint address )
 	{
 		if ( !_readWrite )
 			return 0;
@@ -92,7 +92,7 @@ public class GpioController
 
 	private void UpdateRomMirror()
 	{
-		var rom = Gba.Bus.Rom;
+		var rom = Gba.Memory.Rom;
 		if ( rom.Length < 0xCA )
 			return;
 
@@ -129,7 +129,7 @@ public class GpioController
 
 		if ( _readWrite )
 		{
-			var rom = Gba.Bus.Rom;
+			var rom = Gba.Memory.Rom;
 			if ( rom.Length > 0xC5 )
 			{
 				rom[0xC4] = _pinState;
@@ -315,7 +315,7 @@ public class GpioController
 		return (byte)((value % 10) + ((value / 10 % 10) << 4));
 	}
 
-	public void DetectRtc( byte[] rom )
+	public void InitRtc( byte[] rom )
 	{
 		if ( rom.Length < 0xB4 )
 			return;
@@ -336,7 +336,7 @@ public class GpioController
 		}
 	}
 
-	public void SerializeState( BinaryWriter w )
+	public void Serialize( BinaryWriter w )
 	{
 		w.Write( _writeLatch );
 		w.Write( _pinState );
@@ -353,7 +353,7 @@ public class GpioController
 		w.Write( _rtcTime );
 	}
 
-	public void DeserializeState( BinaryReader r )
+	public void Deserialize( BinaryReader r )
 	{
 		_writeLatch = r.ReadByte();
 		_pinState = r.ReadByte();

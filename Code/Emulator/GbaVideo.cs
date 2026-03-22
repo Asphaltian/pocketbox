@@ -1,8 +1,8 @@
-﻿namespace sGBA;
+namespace sGBA;
 
-public partial class Ppu
+public partial class GbaVideo
 {
-	public GbaSystem Gba { get; }
+	public Gba Gba { get; }
 
 	public int VCount;
 	public int Dot;
@@ -36,7 +36,7 @@ public partial class Ppu
 	internal uint[] _oldCharBase = new uint[2];
 	internal int[] _oldCharBaseFirstY = new int[2];
 
-	public Ppu( GbaSystem gba )
+	public GbaVideo( Gba gba )
 	{
 		Gba = gba;
 	}
@@ -144,7 +144,7 @@ public partial class Ppu
 		DispStat |= 0x0002;
 
 		if ( (DispStat & 0x0010) != 0 )
-			Gba.Io.RaiseIrq( IrqFlag.HBlank );
+			Gba.Io.RaiseIrq( GbaIrq.HBlank );
 
 		if ( VCount < GbaConstants.VisibleLines )
 			Gba.Dma.OnHBlank();
@@ -180,7 +180,7 @@ public partial class Ppu
 		{
 			DispStat |= 0x0001;
 			if ( (DispStat & 0x0008) != 0 )
-				Gba.Io.RaiseIrq( IrqFlag.VBlank );
+				Gba.Io.RaiseIrq( GbaIrq.VBlank );
 			Gba.Dma.OnVBlank();
 
 			PrepareSprites();
@@ -204,12 +204,12 @@ public partial class Ppu
 			_oldCharBaseFirstY[0] = 0;
 			_oldCharBaseFirstY[1] = 0;
 		}
-		else if ( VCount == GbaConstants.TotalLines )
+		else if ( VCount == GbaConstants.VideoVerticalTotalPixels )
 		{
 			VCount = 0;
 		}
 
-		if ( VCount == GbaConstants.TotalLines - 1 )
+		if ( VCount == GbaConstants.VideoVerticalTotalPixels - 1 )
 		{
 			DispStat &= unchecked((ushort)~0x0001);
 		}
@@ -219,7 +219,7 @@ public partial class Ppu
 		{
 			DispStat |= 0x0004;
 			if ( (DispStat & 0x0020) != 0 )
-				Gba.Io.RaiseIrq( IrqFlag.VCountMatch );
+				Gba.Io.RaiseIrq( GbaIrq.VCounter );
 		}
 		else
 		{
