@@ -139,11 +139,11 @@ public class GbaIo
 			case 0x00C: return Gba.Video.BgCnt[2];
 			case 0x00E: return Gba.Video.BgCnt[3];
 
-			case 0x048: return (ushort)(Gba.Video.WinIn & 0x3F3F);
-			case 0x04A: return (ushort)(Gba.Video.WinOut & 0x3F3F);
+			case 0x048: return Gba.Video.WinIn;
+			case 0x04A: return Gba.Video.WinOut;
 
-			case 0x050: return (ushort)(Gba.Video.BldCnt & 0x3FFF);
-			case 0x052: return (ushort)(Gba.Video.BldAlpha & 0x1F1F);
+			case 0x050: return Gba.Video.BldCnt;
+			case 0x052: return Gba.Video.BldAlpha;
 
 			case 0x060:
 			case 0x062:
