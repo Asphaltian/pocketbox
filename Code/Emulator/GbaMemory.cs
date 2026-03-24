@@ -178,7 +178,7 @@ public class GbaMemory
 		WriteBiosWord( off, 0xE25EF004 ); off += 4;
 
 		WriteBiosWord( off, 0xE3A02004 ); off += 4;
-		WriteBiosWord( off, 0xE3A02004 ); off += 4;
+		WriteBiosWord( off, 0xE3A02004 );
 	}
 
 	private void WriteBiosWord( int offset, uint value )

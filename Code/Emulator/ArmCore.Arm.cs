@@ -372,8 +372,11 @@ public partial class ArmCore
 		}
 
 		int dr = (int)((addr >> 24) & 0xF);
-		int wait = byteSwap ? Memory.WaitstatesNonseq16[dr] : Memory.WaitstatesNonseq32[dr];
-		Cycles += wait * 2 + 3;
+		int swpWait = byteSwap ? Memory.WaitstatesNonseq16[dr] : Memory.WaitstatesNonseq32[dr];
+		swpWait = swpWait * 2 + 3;
+		if ( dr < 8 )
+			swpWait = Memory.MemoryStall( Gprs[15], swpWait );
+		Cycles += swpWait;
 		int cr = (int)((Gprs[15] >> 24) & 0xF);
 		Cycles += Memory.WaitstatesNonseq32[cr] - Memory.WaitstatesSeq32[cr];
 	}
@@ -443,10 +446,12 @@ public partial class ArmCore
 		if ( isLoad && rd == 15 ) _prefetchFlushed = true;
 
 		int dataRegion = (int)((addr >> 24) & 0xF);
-		if ( isLoad )
-			Cycles += Memory.WaitstatesNonseq16[dataRegion] + 2;
-		else
-			Cycles += Memory.WaitstatesNonseq16[dataRegion] + 1;
+		{
+			int wait = Memory.WaitstatesNonseq16[dataRegion] + (isLoad ? 2 : 1);
+			if ( dataRegion < 8 )
+				wait = Memory.MemoryStall( Gprs[15], wait );
+			Cycles += wait;
+		}
 		int cr = (int)((Gprs[15] >> 24) & 0xF);
 		Cycles += Memory.WaitstatesNonseq32[cr] - Memory.WaitstatesSeq32[cr];
 	}
@@ -511,15 +516,12 @@ public partial class ArmCore
 		}
 
 		int dataRegion = (int)((addr >> 24) & 0xF);
-		if ( isLoad )
 		{
 			int wait = byteTransfer ? Memory.WaitstatesNonseq16[dataRegion] : Memory.WaitstatesNonseq32[dataRegion];
-			Cycles += wait + 2;
-		}
-		else
-		{
-			int wait = byteTransfer ? Memory.WaitstatesNonseq16[dataRegion] : Memory.WaitstatesNonseq32[dataRegion];
-			Cycles += wait + 1;
+			wait += isLoad ? 2 : 1;
+			if ( dataRegion < 8 )
+				wait = Memory.MemoryStall( Gprs[15], wait );
+			Cycles += wait;
 		}
 		int cr = (int)((Gprs[15] >> 24) & 0xF);
 		Cycles += Memory.WaitstatesNonseq32[cr] - Memory.WaitstatesSeq32[cr];
@@ -552,7 +554,10 @@ public partial class ArmCore
 				Gprs[rn] -= 0x40;
 
 			int dr0 = (int)((Gprs[rn] >> 24) & 0xF);
-			Cycles += Memory.WaitstatesNonseq32[dr0] + (isLoad ? 3 : 2);
+			int emptyWait = Memory.WaitstatesNonseq32[dr0] + (isLoad ? 3 : 2);
+			if ( dr0 < 8 )
+				emptyWait = Memory.MemoryStall( Gprs[15], emptyWait );
+			Cycles += emptyWait;
 			int cr0 = (int)((Gprs[15] >> 24) & 0xF);
 			Cycles += Memory.WaitstatesNonseq32[cr0] - Memory.WaitstatesSeq32[cr0];
 			return;
@@ -615,20 +620,15 @@ public partial class ArmCore
 		}
 
 		{
-			uint wAddr = startAddr;
-			int prevRegion = -1;
-			int dataCycles = 0;
-			for ( int w = 0; w < count; w++ )
-			{
-				int r = (int)((wAddr >> 24) & 0xF);
-				if ( w == 0 || r != prevRegion )
-					dataCycles += 1 + Memory.WaitstatesNonseq32[r];
-				else
-					dataCycles += 1 + Memory.WaitstatesSeq32[r];
-				prevRegion = r;
-				wAddr += 4;
-			}
-			Cycles += dataCycles + (isLoad ? 1 : 0);
+			int blockRegion = (int)((startAddr >> 24) & 0xF);
+			int firstWait = Memory.WaitstatesNonseq32[blockRegion];
+			int seqWait = Memory.WaitstatesSeq32[blockRegion];
+			int blockWait = firstWait + 1 + (count - 1) * (seqWait + 1) + (isLoad ? 1 : 0);
+			uint endAddr = startAddr + (uint)(count * 4);
+			int endRegion = (int)((endAddr >> 24) & 0xF);
+			if ( endRegion < 8 )
+				blockWait = Memory.MemoryStall( Gprs[15], blockWait );
+			Cycles += blockWait;
 		}
 		int cr = (int)((Gprs[15] >> 24) & 0xF);
 		Cycles += Memory.WaitstatesNonseq32[cr] - Memory.WaitstatesSeq32[cr];

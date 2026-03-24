@@ -88,7 +88,7 @@ public class GbaDmaController
 
 	private void ScheduleDma( GbaDma c )
 	{
-		c.When = Gba.Cpu.Cycles + 3;
+		c.When = Gba.Cpu.InstructionStartCycles + 3;
 		c.NextCount = c.EffectiveCount;
 		c.IsFirstUnit = true;
 		Update();

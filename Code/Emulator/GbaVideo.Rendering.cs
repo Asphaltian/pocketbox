@@ -467,7 +467,6 @@ public partial class GbaVideo
 		float centerX = -1, centerY = -1, radius = 0;
 		bool invalid = false;
 		int circleFirstY = -1;
-		int lastStartX = 0, lastEndX = 0;
 		int startX = 0, endX = 0;
 
 		for ( int y = firstY; y < GbaConstants.VisibleLines; y++ )
@@ -486,8 +485,8 @@ public partial class GbaVideo
 				winV = s.Win1VWinIn & 0xFFFFu;
 			}
 
-			lastStartX = startX;
-			lastEndX = endX;
+			int lastStartX = startX;
+			int lastEndX = endX;
 			startX = (int)((winH >> 8) & 0xFF);
 			endX = (int)(winH & 0xFF);
 			int startY = (int)((winV >> 8) & 0xFF);

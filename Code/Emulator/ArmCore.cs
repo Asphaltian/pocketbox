@@ -19,6 +19,7 @@ public partial class ArmCore
 	private readonly uint[] _usrRegsHi = new uint[5];
 
 	public long Cycles;
+	public long InstructionStartCycles;
 	public bool Halted;
 	public bool IrqPending;
 	public bool InIntrWait;
@@ -148,6 +149,8 @@ public partial class ArmCore
 				return;
 			}
 
+			InstructionStartCycles = Cycles;
+
 			if ( ThumbMode )
 				ExecuteThumb();
 			else
@@ -175,6 +178,8 @@ public partial class ArmCore
 
 	public void FlushPipeline()
 	{
+		Memory.LastPrefetchedPc = 0;
+
 		if ( ThumbMode )
 		{
 			Gprs[15] &= ~1u;

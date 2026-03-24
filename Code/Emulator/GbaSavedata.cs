@@ -42,7 +42,7 @@ public class GbaSavedata
 	{
 		Gba = gba;
 		Type = SavedataType.None;
-		Data = Array.Empty<byte>();
+		Data = [];
 		Command = SavedataCommand.EepromNull;
 		FlashState = FlashStateMachine.Raw;
 	}
@@ -98,7 +98,7 @@ public class GbaSavedata
 		else
 		{
 			Type = SavedataType.None;
-			Data = Array.Empty<byte>();
+			Data = [];
 		}
 	}
 
