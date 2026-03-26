@@ -159,6 +159,7 @@ public partial class ArmCore
 			int delta = (int)(Cycles - cyclesBefore);
 			timers.Tick( delta );
 			apu.Tick( delta );
+			io.FinishSioTransfer();
 			io.TickIrqDelay( delta );
 
 			if ( Halted || CrashDetected )

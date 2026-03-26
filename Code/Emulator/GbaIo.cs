@@ -22,7 +22,21 @@ public class GbaIo
 	private ushort _fifoALatch;
 	private ushort _fifoBLatch;
 	private ushort _sioCnt;
+	private readonly ushort[] _sioRegs = new ushort[30];
+	private int _sioMode = SioModeGpio;
+	private long _sioCompletionCycle = long.MaxValue;
 	private ushort _keysLast = 0x400;
+
+	private const int SioModeNormal8 = 0;
+	private const int SioModeNormal32 = 1;
+	private const int SioModeMulti = 2;
+	private const int SioModeUart = 3;
+	private const int SioModeGpio = 8;
+	private const int SioModeJoybus = 12;
+
+	private static readonly int[] SioCyclesPerTransfer = { 31976, 8378, 5750, 3140 };
+
+	public long NextSioEvent => _sioCompletionCycle;
 
 	public GbaIo( Gba gba )
 	{
@@ -39,6 +53,9 @@ public class GbaIo
 		KeyCnt = 0;
 		Rcnt = 0x8000;
 		_sioCnt = 0;
+		Array.Clear( _sioRegs );
+		_sioMode = SioModeGpio;
+		_sioCompletionCycle = long.MaxValue;
 		_keysLast = 0x400;
 		PostFlg = 0;
 		HaltPending = false;
@@ -90,6 +107,59 @@ public class GbaIo
 		}
 	}
 
+	private int SioTransferCycles()
+	{
+		const int CpuFreq = 16777216;
+		switch ( _sioMode )
+		{
+			case SioModeMulti:
+				return SioCyclesPerTransfer[_sioCnt & 3];
+			case SioModeNormal8:
+				return 8 * CpuFreq / (( (_sioCnt & 0x0001) != 0 ? 2048 : 256 ) * 1024);
+			case SioModeNormal32:
+				return 32 * CpuFreq / (( (_sioCnt & 0x0001) != 0 ? 2048 : 256 ) * 1024);
+			default:
+				return 0;
+		}
+	}
+
+	public void FinishSioTransfer()
+	{
+		if ( _sioCompletionCycle == long.MaxValue ) return;
+		if ( Gba.Cpu.Cycles < _sioCompletionCycle ) return;
+
+		int cyclesLate = (int)(Gba.Cpu.Cycles - _sioCompletionCycle);
+		_sioCompletionCycle = long.MaxValue;
+
+		switch ( _sioMode )
+		{
+			case SioModeMulti:
+				_sioRegs[0] = 0;
+				_sioRegs[1] = 0;
+				_sioRegs[2] = 0;
+				_sioRegs[3] = 0;
+				_sioCnt &= unchecked((ushort)~0x0080);
+				_sioCnt &= unchecked((ushort)~0x0030);
+				Rcnt |= 0x0001;
+				if ( (_sioCnt & 0x4000) != 0 )
+					RaiseIrq( GbaIrq.Sio, cyclesLate );
+				break;
+			case SioModeNormal8:
+				_sioCnt &= unchecked((ushort)~0x0080);
+				_sioRegs[5] = 0;
+				if ( (_sioCnt & 0x4000) != 0 )
+					RaiseIrq( GbaIrq.Sio, cyclesLate );
+				break;
+			case SioModeNormal32:
+				_sioCnt &= unchecked((ushort)~0x0080);
+				_sioRegs[0] = 0;
+				_sioRegs[1] = 0;
+				if ( (_sioCnt & 0x4000) != 0 )
+					RaiseIrq( GbaIrq.Sio, cyclesLate );
+				break;
+		}
+	}
+
 	public void TestKeypadIrq()
 	{
 		if ( (KeyCnt & 0x4000) == 0 ) return;
@@ -124,6 +194,145 @@ public class GbaIo
 				_keysLast = 0x400;
 			}
 		}
+	}
+
+	private void SwitchSioMode()
+	{
+		int combined = ((Rcnt & 0xC000) | (_sioCnt & 0x3000)) >> 12;
+		int newMode = combined < 8 ? combined & 3 : combined & 0xC;
+		if ( newMode != _sioMode )
+		{
+			_sioMode = newMode;
+			if ( newMode == SioModeMulti )
+				Rcnt &= unchecked((ushort)~0x0004);
+		}
+	}
+
+	private void WriteRcnt( ushort value )
+	{
+		Rcnt = (ushort)((Rcnt & 0x1FF) | (value & 0xC000));
+		SwitchSioMode();
+		if ( _sioMode == SioModeGpio )
+			Rcnt = (ushort)((Rcnt & 0xC000) | (value & 0x1FF));
+		else
+			Rcnt = (ushort)((Rcnt & 0xC00F) | (value & 0x1F0));
+	}
+
+	private void WriteSioCnt( ushort value )
+	{
+		value &= 0x7FFF;
+		if ( ((value ^ _sioCnt) & 0x3000) != 0 )
+		{
+			_sioCnt = (ushort)(value & 0x3000);
+			SwitchSioMode();
+		}
+
+		switch ( _sioMode )
+		{
+			case SioModeMulti:
+				value &= 0xFF83;
+				value |= 0x0004;
+				value |= (ushort)(_sioCnt & 0x00FC);
+				Rcnt |= 0x0001;
+				if ( (value & 0x0080) != 0 && (_sioCnt & 0x0080) == 0 )
+				{
+					_sioRegs[0] = 0xFFFF;
+					_sioRegs[1] = 0xFFFF;
+					_sioRegs[2] = 0xFFFF;
+					_sioRegs[3] = 0xFFFF;
+					Rcnt &= unchecked((ushort)~0x0001);
+					_sioCompletionCycle = Gba.Cpu.Cycles + SioTransferCycles();
+				}
+				value |= 0x0008;
+				break;
+			case SioModeNormal8:
+			case SioModeNormal32:
+				if ( (value & 0x0001) != 0 )
+					Rcnt |= 0x0001;
+				if ( (value & 0x0080) != 0 && (_sioCnt & 0x0080) == 0 )
+					_sioCompletionCycle = Gba.Cpu.Cycles + SioTransferCycles();
+				value |= 0x0004;
+				break;
+		}
+
+		_sioCnt = value;
+	}
+
+	private void WriteSioRegister( uint offset, ushort value )
+	{
+		int index = (int)((offset - 0x120) >> 1);
+		bool handled = true;
+
+		switch ( _sioMode )
+		{
+			case SioModeJoybus:
+				switch ( offset )
+				{
+					case 0x12A:
+					case 0x154:
+					case 0x156:
+						break;
+					case 0x140:
+						value = (ushort)((value & 0x0040) | (_sioRegs[16] & ~(value & 0x7) & ~0x0040));
+						break;
+					case 0x158:
+						value = (ushort)((value & 0x0030) | (_sioRegs[28] & ~0x30));
+						break;
+					default: handled = false; break;
+				}
+				break;
+			case SioModeNormal8:
+				switch ( offset )
+				{
+					case 0x12A: break;
+					case 0x140:
+						value = (ushort)((value & 0x0040) | (_sioRegs[16] & ~(value & 0x7) & ~0x0040));
+						break;
+					default: handled = false; break;
+				}
+				break;
+			case SioModeNormal32:
+				switch ( offset )
+				{
+					case 0x120:
+					case 0x122:
+					case 0x12A:
+						break;
+					case 0x140:
+						value = (ushort)((value & 0x0040) | (_sioRegs[16] & ~(value & 0x7) & ~0x0040));
+						break;
+					default: handled = false; break;
+				}
+				break;
+			case SioModeMulti:
+				switch ( offset )
+				{
+					case 0x12A: break;
+					case 0x140:
+						value = (ushort)((value & 0x0040) | (_sioRegs[16] & ~(value & 0x7) & ~0x0040));
+						break;
+					default: handled = false; break;
+				}
+				break;
+			case SioModeUart:
+				switch ( offset )
+				{
+					case 0x12A: break;
+					case 0x140:
+						value = (ushort)((value & 0x0040) | (_sioRegs[16] & ~(value & 0x7) & ~0x0040));
+						break;
+					default: handled = false; break;
+				}
+				break;
+			default:
+				handled = false;
+				break;
+		}
+
+		if ( !handled )
+			value = _sioRegs[index];
+
+		_sioRegs[index] = value;
 	}
 
 	public ushort Read16( uint offset )
@@ -209,9 +418,10 @@ public class GbaIo
 			case 0x122:
 			case 0x124:
 			case 0x126:
-				return 0;
+				return _sioRegs[(int)((offset - 0x120) >> 1)];
 			case 0x128: return _sioCnt;
 			case 0x12A:
+				return _sioRegs[5];
 			case 0x12C:
 			case 0x12E:
 				return 0;
@@ -225,13 +435,19 @@ public class GbaIo
 			case 0x13A:
 			case 0x13C:
 			case 0x13E:
+				return 0;
 			case 0x140:
+				return _sioRegs[16];
 			case 0x142:
+				return 0;
 			case 0x150:
 			case 0x152:
+				_sioRegs[28] &= unchecked((ushort)~0x0002);
+				return _sioRegs[(int)((offset - 0x120) >> 1)];
 			case 0x154:
 			case 0x156:
 			case 0x158:
+				return _sioRegs[(int)((offset - 0x120) >> 1)];
 			case 0x15A:
 				return 0;
 
@@ -458,20 +674,18 @@ public class GbaIo
 
 			case 0x120:
 			case 0x122:
+			case 0x12A:
+				WriteSioRegister( offset, value );
+				break;
 			case 0x124:
 			case 0x126:
-			case 0x12A:
+				_sioRegs[(int)((offset - 0x120) >> 1)] = value;
+				break;
 			case 0x12C:
 			case 0x12E:
 				break;
 			case 0x128:
-				_sioCnt = (ushort)(value & 0x7FFF);
-				if ( (value & 0x0080) != 0 )
-				{
-					_sioCnt &= unchecked((ushort)~0x0080);
-					if ( (value & 0x4000) != 0 )
-						RaiseIrq( GbaIrq.Sio );
-				}
+				WriteSioCnt( value );
 				break;
 
 			case 0x130: break;
@@ -484,20 +698,30 @@ public class GbaIo
 				break;
 
 			case 0x134:
-				Rcnt = (ushort)(value & 0xC1FF);
+				WriteRcnt( (ushort)(value & 0xC1FF) );
 				break;
 			case 0x136:
 			case 0x138:
 			case 0x13A:
 			case 0x13C:
 			case 0x13E:
+				break;
 			case 0x140:
+				WriteSioRegister( offset, value );
+				break;
 			case 0x142:
+				break;
 			case 0x150:
 			case 0x152:
+				WriteSioRegister( offset, value );
+				break;
 			case 0x154:
 			case 0x156:
+				_sioRegs[28] |= 0x0008;
+				WriteSioRegister( offset, value );
+				break;
 			case 0x158:
+				WriteSioRegister( offset, value );
 				break;
 
 			case 0x200: IE = value; TestIrq( 1 ); break;
@@ -529,6 +753,10 @@ public class GbaIo
 		w.Write( _fifoALatch );
 		w.Write( _fifoBLatch );
 		w.Write( _sioCnt );
+		w.Write( _sioMode );
+		w.Write( _sioCompletionCycle );
+		for ( int i = 0; i < _sioRegs.Length; i++ )
+			w.Write( _sioRegs[i] );
 		w.Write( _keysLast );
 	}
 
@@ -538,6 +766,10 @@ public class GbaIo
 		_fifoALatch = r.ReadUInt16();
 		_fifoBLatch = r.ReadUInt16();
 		_sioCnt = r.ReadUInt16();
+		_sioMode = r.ReadInt32();
+		_sioCompletionCycle = r.ReadInt64();
+		for ( int i = 0; i < _sioRegs.Length; i++ )
+			_sioRegs[i] = r.ReadUInt16();
 		_keysLast = r.ReadUInt16();
 	}
 }

@@ -135,6 +135,7 @@ public class Gba
 		{
 			long nextEvent = Timers.NextGlobalEvent;
 			nextEvent = Math.Min( nextEvent, Io.NextIrqEvent );
+			nextEvent = Math.Min( nextEvent, Io.NextSioEvent );
 			if ( Dma.ActiveDma >= 0 )
 				nextEvent = Math.Min( nextEvent, Dma.Channels[Dma.ActiveDma].When );
 			nextEvent = Math.Min( nextEvent, target );
@@ -152,6 +153,7 @@ public class Gba
 		Cpu.Cycles += cycles;
 		Timers.Tick( cycles );
 		Audio.Tick( cycles );
+		Io.FinishSioTransfer();
 		Io.TickIrqDelay( cycles );
 	}
 
