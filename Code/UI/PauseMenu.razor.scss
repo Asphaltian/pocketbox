@@ -7,9 +7,12 @@ PauseMenu
 	height: 100%;
 	pointer-events: none;
 	font-family: Poppins;
+	z-index: 2;
+	display: none;
 
 	&.visible
 	{
+		display: flex;
 		pointer-events: all;
 
 		.overlay

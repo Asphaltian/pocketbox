@@ -1,0 +1,357 @@
+@using Sandbox.UI
+@using System.Threading.Tasks
+
+@namespace sGBA
+
+@inherits PanelComponent
+
+<root class="@(IsVisible ? "visible" : "")">
+
+	<div class="lib-bg" />
+
+	<div class="lib-container">
+
+		<div class="lib-header">
+			<div class="lib-header-brand">
+				<div class="lib-logo">sGBA</div>
+				<div class="lib-tagline">Game Boy Advance Library</div>
+			</div>
+			<div class="lib-header-right">
+				<div class="lib-game-count">@_roms.Count game@(_roms.Count == 1 ? "" : "s")</div>
+			</div>
+		</div>
+
+		<div class="lib-divider" />
+
+		<div class="lib-body">
+
+			@if ( _roms.Count == 0 )
+			{
+				<div class="lib-empty">
+					<div class="lib-empty-icon">sports_esports</div>
+					<div class="lib-empty-title">No ROMs Found</div>
+					<div class="lib-empty-hint">Place .gba files in the steamapps\common\sbox\data\asphaltian\sgba directory</div>
+				</div>
+			}
+			else
+			{
+				<RomGrid @ref="_grid" Items=@_romsAsObjects ItemSize=@(new Vector2( 218, 288 )) OnCellClick=@OnRomCellClick ContentVersion=@_thumbnailVersion>
+					<Item Context="romObj">
+						@{ var rom = (RomEntry)romObj; }
+						@{ _thumbnails.TryGetValue( rom.Path, out Texture thumb ); }
+                        <div class="rom-card">
+
+							<div class="card-art">
+
+								@if ( thumb != null )
+								{
+									<Image Texture=@thumb class="card-thumb" />
+								}
+
+								@if ( thumb == null )
+								{
+									<div class="card-no-art">
+										<div class="card-no-art-icon">sports_esports</div>
+										@if ( !string.IsNullOrEmpty( rom.GameCode ) )
+										{
+											<div class="card-no-art-code">@rom.GameCode</div>
+										}
+									</div>
+								}
+
+								@if ( !string.IsNullOrEmpty( rom.Region ) )
+								{
+									<div class="card-region-badge">@FormatRegion( rom.Region )</div>
+								}
+
+								<div class="card-launch-overlay">
+									<div class="card-launch-icon">play_arrow</div>
+								</div>
+
+							</div>
+
+							<div class="card-info">
+								<div class="card-title">@rom.DisplayTitle</div>
+								@if ( !string.IsNullOrEmpty( rom.Publisher ) )
+								{
+									<div class="card-publisher">@rom.Publisher</div>
+								}
+							</div>
+
+						</div>
+					</Item>
+				</RomGrid>
+			}
+
+		</div>
+	</div>
+</root>
+
+@code
+{
+	public static GameLibraryScreen Current { get; private set; }
+
+	private RomGrid _grid;
+	private List<RomEntry> _roms = new();
+	private List<object> _romsAsObjects = new();
+	private HashSet<string> _knownPaths = new();
+	private float _pollTimer = 0f;
+	private const float PollInterval = 3f;
+	private Dictionary<string, Texture> _thumbnails = new();
+	private int _thumbnailVersion = 0;
+	private int _hoveredIndex = -1;
+	private bool _isVisible = true;
+
+	private const float StickDeadzone = 0.1f;
+	private const float RepeatDelay = 0.4f;
+	private const float RepeatRate = 0.08f;
+
+	private bool _useGamepad;
+	private bool _stickUp, _stickDown, _stickLeft, _stickRight;
+	private float _upHoldTime, _upNextRepeat;
+	private float _downHoldTime, _downNextRepeat;
+	private float _leftHoldTime, _leftNextRepeat;
+	private float _rightHoldTime, _rightNextRepeat;
+
+	private int ColumnCount => _grid?.Columns is > 0 ? _grid.Columns : Math.Max( 1, (int)((Screen.Width - 96f) / (200f + 18f)) );
+
+	public bool IsVisible => _isVisible;
+
+	protected override void OnTreeFirstBuilt()
+	{
+		Current = this;
+		_roms = RomLibrary.Discover();
+		_romsAsObjects = _roms.Cast<object>().ToList();
+		_knownPaths = RomLibrary.GetRomPaths();
+		_ = LoadThumbnailsAsync();
+	}
+
+	private async Task LoadThumbnailsAsync()
+	{
+		foreach ( var rom in _roms.ToList() )
+		{
+			if ( string.IsNullOrEmpty( rom.ThumbnailUrl ) )
+				continue;
+
+			var cacheKey = string.IsNullOrEmpty( rom.GameCode )
+				? Math.Abs( rom.ThumbnailUrl.GetHashCode() ).ToString()
+				: rom.GameCode;
+			var cachePath = $"thumbnails/{cacheKey}.png";
+
+			try
+			{
+				if ( !FileSystem.Data.FileExists( cachePath ) )
+				{
+					var bytes = await Http.RequestBytesAsync( rom.ThumbnailUrl );
+					FileSystem.Data.WriteAllBytes( cachePath, bytes );
+				}
+
+				var tex = Texture.LoadFromFileSystem( cachePath, FileSystem.Data );
+				if ( tex != null )
+				{
+					_thumbnails[rom.Path] = tex;
+					_thumbnailVersion++;
+					StateHasChanged();
+				}
+			}
+			catch ( Exception ex )
+			{
+				Log.Warning( $"[sGBA] Thumbnail failed for {rom.DisplayTitle}: {ex.Message}" );
+			}
+		}
+	}
+
+	public void Show()
+	{
+		EmulatorComponent.Current?.Unload();
+		_isVisible = true;
+		SetHovered( -1 );
+		_useGamepad = false;
+		Mouse.Visibility = MouseVisibility.Visible;
+		Sound.Play( "ui.popup.message.open" );
+		StateHasChanged();
+	}
+
+	public void Hide()
+	{
+		_isVisible = false;
+		Mouse.Visibility = MouseVisibility.Hidden;
+		StateHasChanged();
+	}
+
+	private void OnRomCellClick( int i ) => LaunchRom( _roms[i] );
+
+	private void LaunchRom( RomEntry rom )
+	{
+		var emulator = EmulatorComponent.Current;
+		if ( !emulator.IsValid() )
+			return;
+
+		Sound.Play( "ui.button.press" );
+		Hide();
+		emulator.Restart( rom.Path );
+	}
+
+	private static string FormatRegion( string region )
+	{
+		if ( region.Contains( "World" ) ) return "World";
+		if ( region.Contains( "USA" ) ) return "USA";
+		if ( region.Contains( "Europe" ) ) return "EUR";
+		if ( region.Contains( "Japan" ) ) return "JPN";
+		if ( region.Contains( "Australia" ) ) return "AUS";
+		return region.Length > 10 ? region[..8] + ".." : region;
+	}
+
+	private void SetHovered( int index )
+	{
+		_hoveredIndex = index;
+		if ( _grid != null ) _grid.HoveredIndex = index;
+	}
+
+	private void SetGamepadMode()
+	{
+		_useGamepad = true;
+		if ( _grid != null ) _grid.UseMouseHover = false;
+		Mouse.Visibility = MouseVisibility.Hidden;
+	}
+
+	private void DetectMouseUsage()
+	{
+		if ( Mouse.Delta.Length > 5 )
+		{
+			_useGamepad = false;
+			if ( _grid != null ) _grid.UseMouseHover = true;
+			Mouse.Visibility = MouseVisibility.Visible;
+		}
+	}
+
+	protected override void OnUpdate()
+	{
+		_pollTimer += Time.Delta;
+		if ( _pollTimer >= PollInterval )
+		{
+			_pollTimer = 0f;
+			var current = RomLibrary.GetRomPaths();
+			if ( !current.SetEquals( _knownPaths ) )
+			{
+				_knownPaths = current;
+				_roms = RomLibrary.Discover();
+				_romsAsObjects = _roms.Cast<object>().ToList();
+				SetHovered( -1 );
+				_ = LoadThumbnailsAsync();
+				StateHasChanged();
+			}
+		}
+
+		if ( !_isVisible || _roms.Count == 0 ) return;
+
+		DetectMouseUsage();
+
+		// Sync hovered index from grid when in mouse mode
+		if ( !_useGamepad && _grid != null )
+			_hoveredIndex = _grid.HoveredIndex;
+
+		ReadStickEdges( out var upEdge, out var downEdge, out var leftEdge, out var rightEdge );
+
+		HandleNavRepeat( "GBA_Up", upEdge, _stickUp, ref _upHoldTime, ref _upNextRepeat, () => { SetGamepadMode(); NavigateUp(); } );
+		HandleNavRepeat( "GBA_Down", downEdge, _stickDown, ref _downHoldTime, ref _downNextRepeat, () => { SetGamepadMode(); NavigateDown(); } );
+		HandleNavRepeat( "GBA_Left", leftEdge, _stickLeft, ref _leftHoldTime, ref _leftNextRepeat, () => { SetGamepadMode(); NavigateLeft(); } );
+		HandleNavRepeat( "GBA_Right", rightEdge, _stickRight, ref _rightHoldTime, ref _rightNextRepeat, () => { SetGamepadMode(); NavigateRight(); } );
+
+		if ( Input.Pressed( "GBA_A" ) && _hoveredIndex >= 0 )
+		{
+			SetGamepadMode();
+			LaunchRom( _roms[_hoveredIndex] );
+		}
+	}
+
+	private void ReadStickEdges( out bool upEdge, out bool downEdge, out bool leftEdge, out bool rightEdge )
+	{
+		float sx = Input.GetAnalog( InputAnalog.LeftStickX );
+		float sy = Input.GetAnalog( InputAnalog.LeftStickY );
+
+		bool up = sy < -StickDeadzone;
+		bool down = sy > StickDeadzone;
+		bool left = sx < -StickDeadzone;
+		bool right = sx > StickDeadzone;
+
+		upEdge = up && !_stickUp;
+		downEdge = down && !_stickDown;
+		leftEdge = left && !_stickLeft;
+		rightEdge = right && !_stickRight;
+
+		_stickUp = up;
+		_stickDown = down;
+		_stickLeft = left;
+		_stickRight = right;
+	}
+
+	private void HandleNavRepeat( string action, bool stickEdge, bool stickHeld,
+		ref float holdTime, ref float nextRepeat, Action navigate )
+	{
+		if ( Input.Pressed( action ) || stickEdge )
+		{
+			holdTime = 0;
+			nextRepeat = RepeatDelay;
+			navigate();
+		}
+		else if ( Input.Down( action ) || stickHeld )
+		{
+			holdTime += Time.Delta;
+			if ( holdTime >= nextRepeat )
+			{
+				nextRepeat += RepeatRate;
+				navigate();
+			}
+		}
+		else
+		{
+			holdTime = 0;
+		}
+	}
+
+	private void NavigateUp()
+	{
+		if ( _hoveredIndex < 0 ) { SetHovered( 0 ); Sound.Play( "ui.button.over" ); return; }
+		int next = _hoveredIndex - ColumnCount;
+		if ( next >= 0 ) { SetHovered( next ); Sound.Play( "ui.button.over" ); }
+	}
+
+	private void NavigateDown()
+	{
+		if ( _hoveredIndex < 0 ) { SetHovered( 0 ); Sound.Play( "ui.button.over" ); return; }
+		int next = _hoveredIndex + ColumnCount;
+		if ( next < _roms.Count ) { SetHovered( next ); Sound.Play( "ui.button.over" ); }
+	}
+
+	private void NavigateLeft()
+	{
+		if ( _hoveredIndex < 0 ) { SetHovered( 0 ); Sound.Play( "ui.button.over" ); return; }
+		if ( _hoveredIndex % ColumnCount > 0 ) { SetHovered( _hoveredIndex - 1 ); Sound.Play( "ui.button.over" ); }
+	}
+
+	private void NavigateRight()
+	{
+		if ( _hoveredIndex < 0 ) { SetHovered( 0 ); Sound.Play( "ui.button.over" ); return; }
+		if ( _hoveredIndex % ColumnCount < ColumnCount - 1 && _hoveredIndex + 1 < _roms.Count )
+		{
+			SetHovered( _hoveredIndex + 1 );
+			Sound.Play( "ui.button.over" );
+		}
+	}
+
+	protected override int BuildHash()
+	{
+		if ( _isVisible )
+			return HashCode.Combine( _hoveredIndex, _roms.Count, _useGamepad, _thumbnailVersion );
+
+		return HashCode.Combine( _isVisible );
+	}
+
+	protected override void OnDestroy()
+	{
+		if ( Current == this )
+			Current = null;
+		_thumbnails.Clear();
+	}
+}

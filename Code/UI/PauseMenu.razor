@@ -80,6 +80,7 @@
 	private const int MenuCreate = 2;
 	private const int MenuControls = 3;
 	private const int MenuReset = 4;
+	private const int MenuGoToLibrary = 5;
 
 	private readonly string[] MenuItems =
 	[
@@ -87,7 +88,8 @@
 		"Load Suspend Point",
 		"Create Suspend Point",
 		"View/Change Controls",
-		"Reset Game"
+		"Reset Game",
+		"To Game Selection"
 	];
 
 	public bool IsVisible { get; private set; }
@@ -111,7 +113,7 @@
 	private bool ShowSavingDialog { get; set; }
 
 	private bool _useGamepad;
-	private const float StickDeadzone = 0.5f;
+	private const float StickDeadzone = 0.1f;
 	private bool _stickUp, _stickDown, _stickLeft, _stickRight;
 
 	private const float RepeatDelay = 0.4f;
@@ -337,6 +339,14 @@
 			case "Reset Game":
 				EmulatorComponent.Current.ResetEmulator();
 				Resume();
+				break;
+			case "To Game Selection":
+				IsVisible = false;
+				SelectedIndex = MenuContinue;
+				InSlotPanel = false;
+				Mouse.Visibility = MouseVisibility.Hidden;
+				Sound.Play( "ui.popup.message.close" );
+				GameLibraryScreen.Current?.Show();
 				break;
 		}
 	}

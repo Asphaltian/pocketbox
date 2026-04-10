@@ -1,0 +1,18 @@
+@using Sandbox.UI
+
+@namespace sGBA
+
+@inherits PanelComponent
+
+<root>
+	@{ Texture tex = EmulatorComponent.Current?.ScreenTexture; }
+	@if ( tex != null )
+	{
+		<Image Texture=@tex class="screen" />
+	}
+</root>
+
+@code
+{
+	protected override int BuildHash() => (int)(RealTime.Now * 60);
+}
