@@ -1,3 +1,13 @@
+<div align="center">
+  <img width="344" height="87" alt="sGBA logo" src="https://github.com/user-attachments/assets/c59e6aec-615c-4bdd-bda9-1a18eee31d40" />
+
+  [Discord] | [Forums] | [Contributing]
+</div>
+
+[Discord]: https://discord.gg/rbCJdZjewf
+[Forums]: https://sbox.game/f/gendev/1627
+[Contributing]: CONTRIBUTING.md
+
 # sGBA
 
 A Game Boy Advance emulator for [s&box](https://github.com/Facepunch/sbox-public), written entirely in C#.
@@ -23,8 +33,6 @@ A frontend for browsing, launching, and configuring games is planned for a futur
 If you would like to contribute, please see the [contributing guide](CONTRIBUTING.md).
 
 If you want to report bugs or request features, see [issues](https://github.com/Asphaltian/sgba/issues).
-
-You can also join the [Discord server](https://discord.gg/rbCJdZjewf) or visit this [forum thread](https://sbox.game/f/gendev/1627) for general discussions.
 
 ## License
 
