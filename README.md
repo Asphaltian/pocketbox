@@ -1,9 +1,10 @@
 <div align="center">
   <img width="344" height="87" alt="sGBA logo" src="https://github.com/user-attachments/assets/c59e6aec-615c-4bdd-bda9-1a18eee31d40" />
 
-  [Discord] | [Forums] | [Contributing]
+  [Workshop] | [Discord] | [Forums] | [Contributing]
 </div>
 
+[Workshop]: https://sbox.game/asphaltian/sgba
 [Discord]: https://discord.gg/rbCJdZjewf
 [Forums]: https://sbox.game/f/gendev/1627
 [Contributing]: CONTRIBUTING.md
