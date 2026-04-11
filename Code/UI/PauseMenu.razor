@@ -8,10 +8,11 @@
 	<div class="overlay">
 		<div class="menu-container">
 			<div class="menu-left @(_inSlotPanel ? "in-slots" : "")">
-				@foreach (var item in MenuItems)
+				@for (int i = 0; i < MenuItems.Length; i++)
 				{
-					<div class="menu-item @(item == SelectedItem ? "selected" : "")" onmouseenter=@(() => SelectItemByName(item)) onclick=@(() => ActivateItem(item))>
-						@item
+					var idx = i;
+					<div class="menu-item @(idx == _selectedIndex ? "selected" : "")" onmouseenter=@(() => SelectItem(idx)) onclick=@(() => ActivateItem(idx))>
+						@MenuItems[idx]
 					</div>
 				}
 			</div>
@@ -28,11 +29,11 @@
 							}
 							else
 							{
-								<span>No data.</span>
+								<span>#pause.slot.empty</span>
 							}
 						</div>
 						<div class="slot-info">
-							<div class="slot-label">Save slot #@slot</div>
+							<div class="slot-label"><span>#pause.slot.label</span><span>@slot</span></div>
 							@if (SlotTimestamps[slot - 1] != null)
 							{
 								<div class="slot-timestamp">@SlotTimestamps[slot - 1].Value.ToString("dd/MM/yyyy - HH:mm")</div>
@@ -46,17 +47,17 @@
 
 	<div class="dialog-overlay @(_showConfirmDialog ? "visible" : "")">
 		<div class="confirm-box">
-			<div class="dialog-message">Overwrite this data?</div>
+			<div class="dialog-message">#pause.confirm.message</div>
 			<div class="confirm-buttons">
-				<div class="confirm-btn @(_confirmSelection == 0 ? "selected" : "")" onmouseenter=@(() => _confirmSelection = 0) onclick=@(() => ConfirmOverwrite())>Yes</div>
-				<div class="confirm-btn @(_confirmSelection == 1 ? "selected" : "")" onmouseenter=@(() => _confirmSelection = 1) onclick=@(() => CancelOverwrite())>No</div>
+				<div class="confirm-btn @(_confirmSelection == 0 ? "selected" : "")" onmouseenter=@(() => _confirmSelection = 0) onclick=@(() => ConfirmOverwrite())>#pause.confirm.yes</div>
+				<div class="confirm-btn @(_confirmSelection == 1 ? "selected" : "")" onmouseenter=@(() => _confirmSelection = 1) onclick=@(() => CancelOverwrite())>#pause.confirm.no</div>
 			</div>
 		</div>
 	</div>
 
 	<div class="dialog-overlay @(_showSavingDialog ? "visible" : "")">
 		<div class="dialog-box">
-			<div class="dialog-message">Saving...</div>
+			<div class="dialog-message">#pause.saving</div>
 		</div>
 	</div>
 </root>
@@ -72,17 +73,16 @@
 
 	private readonly string[] MenuItems =
 	[
-		"Continue",
-		"Load Suspend Point",
-		"Create Suspend Point",
-		"View/Change Controls",
-		"Reset Game",
-		"To Game Selection"
+		"#pause.continue",
+		"#pause.load",
+		"#pause.create",
+		"#pause.controls",
+		"#pause.reset",
+		"#pause.library"
 	];
 
 	public bool IsVisible { get; private set; }
 	private int _selectedIndex;
-	private string SelectedItem => MenuItems[_selectedIndex];
 	private bool HasSlotPanel => _selectedIndex is MenuLoad or MenuCreate;
 	private bool IsLoadMode => _selectedIndex == MenuLoad;
 
@@ -164,7 +164,7 @@
 			else if (HasSlotPanel)
 				EnterSlotPanel();
 			else
-				ActivateItem(SelectedItem);
+				ActivateItem(_selectedIndex);
 		}
 
 		if (Input.Pressed("GBA_B"))
@@ -274,6 +274,7 @@
 		SetGamepadMode();
 		Sound.Play("ui.button.press");
 		_inSlotPanel = false;
+		_selectedIndex = MenuContinue;
 	}
 
 	private void Pause()
@@ -299,35 +300,34 @@
 		EmulatorComponent.Current.SetPaused(false);
 	}
 
-	private void SelectItemByName(string item)
+	private void SelectItem(int index)
 	{
-		_selectedIndex = Array.IndexOf(MenuItems, item);
+		_selectedIndex = index;
 		_inSlotPanel = false;
 		if (HasSlotPanel)
 			_highlightedSlot = 1;
 	}
 
-	private void ActivateItem(string item)
+	private void ActivateItem(int index)
 	{
-		switch (item)
+		switch (index)
 		{
-			case "Continue":
+			case MenuContinue:
 				Resume();
 				break;
-			case "Load Suspend Point":
-			case "Create Suspend Point":
-				SelectItemByName(item);
+			case MenuLoad:
+			case MenuCreate:
+				SelectItem(index);
 				_inSlotPanel = true;
-				_highlightedSlot = 1;
 				break;
-			case "View/Change Controls":
+			case MenuControls:
 				Game.Overlay.ShowBinds();
 				break;
-			case "Reset Game":
+			case MenuReset:
 				EmulatorComponent.Current.ResetEmulator();
 				Resume();
 				break;
-			case "To Game Selection":
+			case MenuGoToLibrary:
 				IsVisible = false;
 				_selectedIndex = MenuContinue;
 				_inSlotPanel = false;
