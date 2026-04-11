@@ -1,0 +1,487 @@
+@using Sandbox.UI
+
+@namespace sGBA
+
+@inherits PanelComponent
+
+<root class="@(IsVisible ? "visible" : "") @(_showConfirmDialog ? "confirm-open" : "") @(_showSavingDialog ? "saving-open" : "")">
+	<div class="overlay">
+		<div class="menu-container">
+			<div class="menu-left @(_inSlotPanel ? "in-slots" : "")">
+				@for (int i = 0; i < MenuItems.Length; i++)
+				{
+					var idx = i;
+					<div class="menu-item @(idx == _selectedIndex ? "selected" : "")" onmouseenter=@(() => SelectItem(idx)) onclick=@(() => ActivateItem(idx))>
+						@MenuItems[idx]
+					</div>
+				}
+			</div>
+			<div class="menu-divider @(HasSlotPanel ? "visible" : "")"></div>
+			<div class="menu-right @(HasSlotPanel ? "visible" : "")">
+				@for (int i = 1; i <= GbaSerialize.SlotCount; i++)
+				{
+					var slot = i;
+					<div class="slot @(slot == _highlightedSlot && HasSlotPanel ? "highlighted" : "")" onmouseenter=@(() => _highlightedSlot = slot) onclick=@(() => ActivateSlot(slot))>
+						<div class="slot-preview">
+							@if (SlotTextures[slot - 1] != null)
+							{
+								<Image Texture=@SlotTextures[slot - 1] />
+							}
+							else
+							{
+								<span>#pause.slot.empty</span>
+							}
+						</div>
+						<div class="slot-info">
+							<div class="slot-label"><span>#pause.slot.label</span><span>@slot</span></div>
+							@if (SlotTimestamps[slot - 1] != null)
+							{
+								<div class="slot-timestamp">@SlotTimestamps[slot - 1].Value.ToString("dd/MM/yyyy - HH:mm")</div>
+							}
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+	</div>
+
+	<div class="dialog-overlay @(_showConfirmDialog ? "visible" : "")">
+		<div class="confirm-box">
+			<div class="dialog-message">#pause.confirm.message</div>
+			<div class="confirm-buttons">
+				<div class="confirm-btn @(_confirmSelection == 0 ? "selected" : "")" onmouseenter=@(() => _confirmSelection = 0) onclick=@(() => ConfirmOverwrite())>#pause.confirm.yes</div>
+				<div class="confirm-btn @(_confirmSelection == 1 ? "selected" : "")" onmouseenter=@(() => _confirmSelection = 1) onclick=@(() => CancelOverwrite())>#pause.confirm.no</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="dialog-overlay @(_showSavingDialog ? "visible" : "")">
+		<div class="dialog-box">
+			<div class="dialog-message">#pause.saving</div>
+		</div>
+	</div>
+</root>
+
+@code
+{
+	private const int MenuContinue = 0;
+	private const int MenuLoad = 1;
+	private const int MenuCreate = 2;
+	private const int MenuControls = 3;
+	private const int MenuReset = 4;
+	private const int MenuGoToLibrary = 5;
+
+	private readonly string[] MenuItems =
+	[
+		"#pause.continue",
+		"#pause.load",
+		"#pause.create",
+		"#pause.controls",
+		"#pause.reset",
+		"#pause.library"
+	];
+
+	public bool IsVisible { get; private set; }
+	private int _selectedIndex;
+	private bool HasSlotPanel => _selectedIndex is MenuLoad or MenuCreate;
+	private bool IsLoadMode => _selectedIndex == MenuLoad;
+
+	private bool _inSlotPanel;
+	private int _highlightedSlot = 1;
+
+	private readonly Texture[] SlotTextures = new Texture[GbaSerialize.SlotCount];
+	private readonly bool[] SlotOccupied = new bool[GbaSerialize.SlotCount];
+	private readonly DateTime?[] SlotTimestamps = new DateTime?[GbaSerialize.SlotCount];
+	private int _slotVersion;
+
+	private bool _showConfirmDialog;
+	private int _confirmSelection;
+	private int _pendingOverwriteSlot;
+	private bool _showSavingDialog;
+
+	private bool _useGamepad;
+	private const float StickDeadzone = 0.1f;
+	private bool _stickUp, _stickDown, _stickLeft, _stickRight;
+
+	private const float RepeatDelay = 0.4f;
+	private const float RepeatRate = 0.08f;
+	private float _upHoldTime, _upNextRepeat;
+	private float _downHoldTime, _downNextRepeat;
+
+	protected override void OnUpdate()
+	{
+		if (!EmulatorComponent.Current.IsValid() || !EmulatorComponent.Current.IsReady)
+			return;
+
+		if (Input.EscapePressed)
+		{
+			Input.EscapePressed = false;
+
+			if (IsVisible && !new Game.Overlay().IsOpen)
+				Resume();
+			else if (!IsVisible)
+				Pause();
+
+			return;
+		}
+
+		if (!IsVisible) return;
+		if (new Game.Overlay().IsOpen) return;
+
+		if (_showConfirmDialog)
+		{
+			HandleConfirmInput();
+			return;
+		}
+
+		if (_showSavingDialog) return;
+
+		DetectMouseUsage();
+		ReadStickEdges(out var upEdge, out var downEdge, out var leftEdge, out var rightEdge);
+
+		HandleVerticalRepeat("GBA_Up", upEdge, _stickUp, ref _upHoldTime, ref _upNextRepeat, NavigateUp);
+		HandleVerticalRepeat("GBA_Down", downEdge, _stickDown, ref _downHoldTime, ref _downNextRepeat, NavigateDown);
+
+		if (Input.Pressed("GBA_Right") || rightEdge)
+		{
+			if (!_inSlotPanel && HasSlotPanel)
+				EnterSlotPanel();
+		}
+
+		if (Input.Pressed("GBA_Left") || leftEdge)
+		{
+			if (_inSlotPanel)
+				ExitSlotPanel();
+		}
+
+		if (Input.Pressed("GBA_A"))
+		{
+			SetGamepadMode();
+			Sound.Play("ui.button.press");
+
+			if (_inSlotPanel)
+				ActivateSlot(_highlightedSlot);
+			else if (HasSlotPanel)
+				EnterSlotPanel();
+			else
+				ActivateItem(_selectedIndex);
+		}
+
+		if (Input.Pressed("GBA_B"))
+		{
+			SetGamepadMode();
+			Sound.Play("ui.button.press");
+
+			if (_inSlotPanel)
+				ExitSlotPanel();
+			else
+				Resume();
+		}
+	}
+
+	private void ReadStickEdges(out bool upEdge, out bool downEdge, out bool leftEdge, out bool rightEdge)
+	{
+		float sx = Input.GetAnalog(InputAnalog.LeftStickX);
+		float sy = Input.GetAnalog(InputAnalog.LeftStickY);
+
+		bool up = sy < -StickDeadzone;
+		bool down = sy > StickDeadzone;
+		bool left = sx < -StickDeadzone;
+		bool right = sx > StickDeadzone;
+
+		upEdge = up && !_stickUp;
+		downEdge = down && !_stickDown;
+		leftEdge = left && !_stickLeft;
+		rightEdge = right && !_stickRight;
+
+		_stickUp = up;
+		_stickDown = down;
+		_stickLeft = left;
+		_stickRight = right;
+	}
+
+	private void HandleVerticalRepeat(string action, bool stickEdge, bool stickHeld,
+		ref float holdTime, ref float nextRepeat, Action navigate)
+	{
+		if (Input.Pressed(action) || stickEdge)
+		{
+			holdTime = 0;
+			nextRepeat = RepeatDelay;
+			navigate();
+		}
+		else if (Input.Down(action) || stickHeld)
+		{
+			holdTime += Time.Delta;
+			if (holdTime >= nextRepeat)
+			{
+				nextRepeat += RepeatRate;
+				navigate();
+			}
+		}
+		else
+		{
+			holdTime = 0;
+		}
+	}
+
+	private void SetGamepadMode()
+	{
+		_useGamepad = true;
+		Mouse.Visibility = MouseVisibility.Hidden;
+	}
+
+	private void DetectMouseUsage()
+	{
+		if (Mouse.Delta.Length > 5)
+		{
+			_useGamepad = false;
+			Mouse.Visibility = MouseVisibility.Visible;
+		}
+	}
+
+	private void NavigateUp()
+	{
+		SetGamepadMode();
+		Sound.Play("ui.button.over");
+
+		if (_inSlotPanel)
+			_highlightedSlot = _highlightedSlot <= 1 ? GbaSerialize.SlotCount : _highlightedSlot - 1;
+		else
+			_selectedIndex = _selectedIndex <= 0 ? MenuItems.Length - 1 : _selectedIndex - 1;
+	}
+
+	private void NavigateDown()
+	{
+		SetGamepadMode();
+		Sound.Play("ui.button.over");
+
+		if (_inSlotPanel)
+			_highlightedSlot = _highlightedSlot >= GbaSerialize.SlotCount ? 1 : _highlightedSlot + 1;
+		else
+			_selectedIndex = _selectedIndex >= MenuItems.Length - 1 ? 0 : _selectedIndex + 1;
+	}
+
+	private void EnterSlotPanel()
+	{
+		SetGamepadMode();
+		Sound.Play("ui.button.press");
+		_inSlotPanel = true;
+		_highlightedSlot = 1;
+	}
+
+	private void ExitSlotPanel()
+	{
+		SetGamepadMode();
+		Sound.Play("ui.button.press");
+		_inSlotPanel = false;
+		_selectedIndex = MenuContinue;
+	}
+
+	private void Pause()
+	{
+		IsVisible = true;
+		_selectedIndex = 0;
+		_inSlotPanel = false;
+		_highlightedSlot = 1;
+		_stickUp = _stickDown = _stickLeft = _stickRight = false;
+		SetGamepadMode();
+		Sound.Play("ui.popup.message.open");
+		EmulatorComponent.Current.SetPaused(true);
+		RefreshSlotPreviews();
+	}
+
+	private void Resume()
+	{
+		IsVisible = false;
+		_selectedIndex = MenuContinue;
+		_inSlotPanel = false;
+		Mouse.Visibility = MouseVisibility.Hidden;
+		Sound.Play("ui.popup.message.close");
+		EmulatorComponent.Current.SetPaused(false);
+	}
+
+	private void SelectItem(int index)
+	{
+		_selectedIndex = index;
+		_inSlotPanel = false;
+		if (HasSlotPanel)
+			_highlightedSlot = 1;
+	}
+
+	private void ActivateItem(int index)
+	{
+		switch (index)
+		{
+			case MenuContinue:
+				Resume();
+				break;
+			case MenuLoad:
+			case MenuCreate:
+				SelectItem(index);
+				_inSlotPanel = true;
+				break;
+			case MenuControls:
+				Game.Overlay.ShowBinds();
+				break;
+			case MenuReset:
+				EmulatorComponent.Current.ResetEmulator();
+				Resume();
+				break;
+			case MenuGoToLibrary:
+				IsVisible = false;
+				_selectedIndex = MenuContinue;
+				_inSlotPanel = false;
+				Mouse.Visibility = MouseVisibility.Hidden;
+				Sound.Play("ui.popup.message.close");
+				GameLibraryScreen.Current?.Show();
+				break;
+		}
+	}
+
+	private void ActivateSlot(int slot)
+	{
+		if (IsLoadMode)
+		{
+			if (!SlotOccupied[slot - 1])
+				return;
+
+			EmulatorComponent.Current.LoadSuspendPoint(slot);
+			Resume();
+		}
+		else
+		{
+			if (SlotOccupied[slot - 1])
+			{
+				_pendingOverwriteSlot = slot;
+				_confirmSelection = 0;
+				_showConfirmDialog = true;
+				Sound.Play("ui.popup.message.open");
+				return;
+			}
+
+			DoSave(slot);
+		}
+	}
+
+	private void HandleConfirmInput()
+	{
+		float sy = Input.GetAnalog(InputAnalog.LeftStickY);
+		bool up = sy < -StickDeadzone;
+		bool down = sy > StickDeadzone;
+		bool upEdge = up && !_stickUp;
+		bool downEdge = down && !_stickDown;
+		_stickUp = up;
+		_stickDown = down;
+
+		if (Input.Pressed("GBA_Up") || upEdge || Input.Pressed("GBA_Down") || downEdge)
+		{
+			SetGamepadMode();
+			Sound.Play("ui.button.over");
+			_confirmSelection = _confirmSelection == 0 ? 1 : 0;
+		}
+
+		if (Input.Pressed("GBA_A"))
+		{
+			SetGamepadMode();
+			Sound.Play("ui.button.press");
+
+			if (_confirmSelection == 0)
+				ConfirmOverwrite();
+			else
+				CancelOverwrite();
+		}
+
+		if (Input.Pressed("GBA_B"))
+		{
+			SetGamepadMode();
+			Sound.Play("ui.button.press");
+			CancelOverwrite();
+		}
+
+		DetectMouseUsage();
+	}
+
+	private void ConfirmOverwrite()
+	{
+		_showConfirmDialog = false;
+		DoSave(_pendingOverwriteSlot);
+	}
+
+	private void CancelOverwrite()
+	{
+		_showConfirmDialog = false;
+		Sound.Play("ui.popup.message.close");
+	}
+
+	private async void DoSave(int slot)
+	{
+		_showSavingDialog = true;
+		await Task.Delay(100);
+		EmulatorComponent.Current.CreateSuspendPoint(slot);
+		RefreshSlotPreviews();
+		await Task.Delay(500);
+		_showSavingDialog = false;
+	}
+
+	private void RefreshSlotPreviews()
+	{
+		var emu = EmulatorComponent.Current;
+		if (!emu.IsValid()) return;
+
+		for (int i = 0; i < GbaSerialize.SlotCount; i++)
+		{
+			var path = emu.GetStatePath(i + 1);
+
+			if (!FileSystem.Data.FileExists(path))
+			{
+				ClearSlot(i);
+				continue;
+			}
+
+			var data = FileSystem.Data.ReadAllBytes(path).ToArray();
+			SlotOccupied[i] = true;
+			SlotTimestamps[i] = GbaSerialize.ReadTimestamp(data);
+
+			var screenshot = GbaSerialize.ReadScreenshot(data);
+			if (screenshot == null) continue;
+
+			if (SlotTextures[i] == null)
+			{
+				SlotTextures[i] = Texture.Create(GbaConstants.ScreenWidth, GbaConstants.ScreenHeight, ImageFormat.RGBA8888)
+					.WithDynamicUsage()
+					.WithName($"suspend-preview-{i}")
+					.Finish();
+			}
+
+			SlotTextures[i].Update(screenshot, 0, 0, GbaConstants.ScreenWidth, GbaConstants.ScreenHeight);
+		}
+
+		_slotVersion++;
+	}
+
+	private void ClearSlot(int index)
+	{
+		SlotOccupied[index] = false;
+		SlotTimestamps[index] = null;
+		SlotTextures[index]?.Dispose();
+		SlotTextures[index] = null;
+	}
+
+	protected override int BuildHash()
+	{
+		return HashCode.Combine(
+			IsVisible, _selectedIndex, _inSlotPanel, _highlightedSlot,
+			_useGamepad, _slotVersion, _showConfirmDialog,
+			HashCode.Combine(_confirmSelection, _showSavingDialog)
+		);
+	}
+
+	protected override void OnDestroy()
+	{
+		for (int i = 0; i < SlotTextures.Length; i++)
+		{
+			SlotTextures[i]?.Dispose();
+			SlotTextures[i] = null;
+		}
+	}
+}

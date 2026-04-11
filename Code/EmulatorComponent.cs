@@ -44,17 +44,69 @@ public sealed partial class EmulatorComponent : Component
 	{
 		Current = this;
 		GbaLog.SetBackend( LogBackend );
+		_camera = Scene.Camera;
+		if ( !string.IsNullOrEmpty( RomPath ) )
+			InitCore();
+	}
 
+	public void Restart( string romPath )
+	{
+		TearDownCore();
+		RomPath = romPath;
+		IsReady = false;
+		ErrorMessage = null;
+		InitCore();
+	}
+
+	public void Unload()
+	{
+		TearDownCore();
+		RomPath = null;
+	}
+
+	private void TearDownCore()
+	{
+		_cts?.Cancel();
+		_cts = null;
+
+		if ( Core?.Savedata != null && Core.Savedata.Data.Length > 0 && _savePath != null )
+			FileSystem.Data.WriteAllBytes( _savePath, Core.Savedata.Data );
+
+		if ( _soundHandle is { IsValid: true } )
+			_soundHandle.Volume = 0;
+		_audioStream?.Dispose();
+		_audioStream = null;
+
+		if ( _camera.IsValid() && Core?.Video?.RenderCommandList != null )
+			_camera.RemoveCommandList( Core.Video.RenderCommandList );
+
+		Core?.Video?.DisposeGpu();
+		Core = null;
+		ScreenTexture = null;
+		_frameChannel = null;
+		_frameSemaphore?.Dispose();
+		_frameSemaphore = null;
+		_frameDebt = 0;
+		_workerBufIdx = 0;
+		_inputCooldown = 0;
+		_paused = false;
+		_inputKeys = 0x03FF;
+		IsReady = false;
+	}
+
+	private void InitCore()
+	{
 		try
 		{
-			if ( !FileSystem.Mounted.FileExists( RomPath ) )
+			if ( !FileSystem.Mounted.FileExists( RomPath ) && !FileSystem.Data.FileExists( RomPath ) )
 			{
 				ErrorMessage = $"ROM not found: {RomPath}";
 				GbaLog.Write( LogCategory.GBA, LogLevel.Error, ErrorMessage );
 				return;
 			}
 
-			var romData = FileSystem.Mounted.ReadAllBytes( RomPath ).ToArray();
+			var romFs = FileSystem.Mounted.FileExists( RomPath ) ? FileSystem.Mounted : FileSystem.Data;
+			var romData = romFs.ReadAllBytes( RomPath ).ToArray();
 			if ( romData.Length < 192 )
 			{
 				ErrorMessage = "ROM file is too small to be a valid GBA ROM.";
@@ -78,7 +130,6 @@ public sealed partial class EmulatorComponent : Component
 			Core.Video.InitGpu( scale: ComputeAutoScale() );
 			ScreenTexture = Core.Video.OutputTexture;
 
-			_camera = Scene.Camera;
 			if ( _camera.IsValid() && Core.Video.RenderCommandList != null )
 				_camera.AddCommandList( Core.Video.RenderCommandList, Stage.AfterOpaque, 0 );
 
@@ -111,7 +162,8 @@ public sealed partial class EmulatorComponent : Component
 	{
 		if ( _audioStream != null )
 		{
-			_soundHandle.Volume = 0;
+			if ( _soundHandle is { IsValid: true } )
+				_soundHandle.Volume = 0;
 			_audioStream.Dispose();
 			_audioStream = null;
 		}
@@ -184,7 +236,7 @@ public sealed partial class EmulatorComponent : Component
 
 		PollInput();
 
-		if ( _audioStream != null && !_soundHandle.IsValid )
+		if ( _audioStream != null && _soundHandle is not { IsValid: true } )
 		{
 			try { InitAudioStream(); }
 			catch { _audioStream = null; }
@@ -272,13 +324,13 @@ public sealed partial class EmulatorComponent : Component
 		if ( paused )
 		{
 			_frameDebt = 0;
-			if ( _soundHandle.IsValid )
+			if ( _soundHandle is { IsValid: true } )
 				_soundHandle.Volume = 0;
 		}
 		else
 		{
 			_inputCooldown = 2;
-			if ( _soundHandle.IsValid )
+			if ( _soundHandle is { IsValid: true } )
 				_soundHandle.Volume = 1.0f;
 		}
 	}
@@ -332,25 +384,8 @@ public sealed partial class EmulatorComponent : Component
 
 	protected override void OnDestroy()
 	{
-		_cts?.Cancel();
-
-		if ( Core?.Savedata != null && Core.Savedata.Data.Length > 0 && _savePath != null )
-		{
-			FileSystem.Data.WriteAllBytes( _savePath, Core.Savedata.Data );
-		}
-
-		_soundHandle.Volume = 0;
-		_audioStream?.Dispose();
-		_audioStream = null;
-		_frameSemaphore?.Dispose();
-
-		if ( _camera.IsValid() && Core?.Video?.RenderCommandList != null )
-			_camera.RemoveCommandList( Core.Video.RenderCommandList );
-
-		Core?.Video?.DisposeGpu();
+		TearDownCore();
 		_camera = null;
-		Core = null;
-		ScreenTexture = null;
 	}
 
 	private static void LogBackend( LogCategory category, LogLevel level, string message )

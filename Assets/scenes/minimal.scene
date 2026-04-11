@@ -127,8 +127,8 @@
           "ZIndex": 100
         },
         {
-          "__type": "sGBA.EmulatorPanel",
-          "__guid": "27927435-8689-4081-82bf-1ebba4a5c0ed",
+          "__type": "sGBA.GameLibraryScreen",
+          "__guid": "ef222d8a-cdb6-4779-b0fb-4ec3f7fb1cc0",
           "__enabled": true,
           "Flags": 0,
           "OnComponentDestroy": null,
@@ -140,7 +140,19 @@
         },
         {
           "__type": "sGBA.PauseMenu",
-          "__guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          "__guid": "76128ec0-c147-4051-8bf4-22189153aee3",
+          "__enabled": true,
+          "Flags": 0,
+          "OnComponentDestroy": null,
+          "OnComponentDisabled": null,
+          "OnComponentEnabled": null,
+          "OnComponentFixedUpdate": null,
+          "OnComponentStart": null,
+          "OnComponentUpdate": null
+        },
+        {
+          "__type": "sGBA.GameScreen",
+          "__guid": "09e72b78-f241-41d0-8362-19349632b868",
           "__enabled": true,
           "Flags": 0,
           "OnComponentDestroy": null,
@@ -180,7 +192,7 @@
           "OnComponentFixedUpdate": null,
           "OnComponentStart": null,
           "OnComponentUpdate": null,
-          "RomPath": "roms/suite.gba"
+          "RomPath": null
         }
       ],
       "Children": []
@@ -203,13 +215,17 @@
       "AgentStepSize": 18,
       "AgentMaxSlope": 40,
       "ExcludedBodies": "",
-      "IncludedBodies": ""
+      "IncludedBodies": "",
+      "CustomBounds": false
     },
     "GameObjectSystems": {
       "Sandbox.Clutter.ClutterGridSystem": {
         "Storage": {
-          "$blob": "8b113cbb-ffcf-4a8a-a12b-6d660e5edd04"
+          "$blob": "5d152011-97c1-4063-a301-2d68b85b67bf"
         }
+      },
+      "Sandbox.MovieMaker.MovieRecorderSystem": {
+        "DisableClientRecording": false
       }
     }
   },

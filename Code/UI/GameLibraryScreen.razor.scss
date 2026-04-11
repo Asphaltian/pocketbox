@@ -1,0 +1,330 @@
+GameLibraryScreen
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	pointer-events: none;
+	font-family: Poppins;
+	transition: opacity 0.3s ease;
+	z-index: 3;
+	background-color: #0d0d0d;
+
+	&.visible
+	{
+		opacity: 1;
+		pointer-events: all;
+
+		.lib-container
+		{
+			transform: translateY(0);
+		}
+	}
+
+	.lib-bg
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		background-color: #0b0d14;
+	}
+
+	.lib-container
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		flex-direction: column;
+		transform: translateY(12px);
+		transition: transform 0.3s ease;
+	}
+
+	.lib-header
+	{
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding: 28px 48px 20px 48px;
+		flex-shrink: 0;
+	}
+
+	.lib-header-brand
+	{
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.lib-logo
+	{
+		width: 172px;
+		height: 43.5px;
+		background-size: contain;
+		background-repeat: no-repeat;
+		background-position: left center;
+	}
+
+	.lib-header-right
+	{
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 8px;
+	}
+
+	.lib-search-bar
+	{
+		flex-direction: row;
+		align-items: center;
+		background-color: rgba(255, 255, 255, 0.05);
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		padding: 0 12px;
+		gap: 8px;
+		width: 280px;
+		transition: border-color 0.15s ease;
+
+		&.focused, &.pad-hover
+		{
+			border-color: rgba(79, 114, 245, 0.5);
+		}
+	}
+
+	.lib-search-icon
+	{
+		font-family: "Material Icons";
+		font-size: 16px;
+		color: rgba(255, 255, 255, 0.3);
+		flex-shrink: 0;
+	}
+
+	.lib-search-input
+	{
+		flex: 1;
+		font-size: 13px;
+		color: rgba(255, 255, 255, 0.85);
+		background-color: transparent;
+		border: none;
+		padding: 8px 0;
+	}
+
+	.lib-divider
+	{
+		height: 1px;
+		margin: 0 48px;
+		background-color: rgba(79, 114, 245, 0.15);
+		flex-shrink: 0;
+	}
+
+	.lib-body
+	{
+		flex-grow: 1;
+		flex-shrink: 1;
+		flex-direction: column;
+		padding: 28px 40px;
+	}
+
+	RomGrid
+	{
+		width: 100%;
+		height: 100%;
+		padding-top: 20px;
+		padding-bottom: 20px;
+		mask-image: linear-gradient( to bottom, black 0%, white 4%, white 96%, black 100% );
+
+		.cell
+		{
+			padding: 9px;
+		}
+
+		.cell.hovered
+		{
+			z-index: 1;
+		}
+
+		.cell.hovered .rom-card
+		{
+			transform: scale(1.06);
+			border-color: rgba(79, 114, 245, 0.7);
+			box-shadow: 0 0 18px rgba(79, 114, 245, 0.3);
+		}
+	}
+
+	.lib-empty
+	{
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 12px;
+		padding: 80px 0;
+	}
+
+	.lib-empty-icon
+	{
+		font-family: "Material Icons";
+		font-size: 64px;
+		color: rgba(79, 114, 245, 0.2);
+	}
+
+	.lib-empty-title
+	{
+		font-size: 22px;
+		font-weight: 600;
+		color: rgba(255, 255, 255, 0.6);
+	}
+
+	.lib-empty-hint
+	{
+		font-size: 14px;
+		font-weight: 400;
+		color: rgba(255, 255, 255, 0.3);
+	}
+
+	.rom-card
+	{
+		width: 100%;
+		height: 100%;
+		flex-direction: column;
+		background-color: rgba(255, 255, 255, 0.03);
+		border-radius: 5px;
+		border: 1px solid rgba(255, 255, 255, 0.05);
+		overflow: hidden;
+		cursor: pointer;
+		transition: border-color 0.1s ease;
+
+		&:hover
+		{
+			border-color: rgba(79, 114, 245, 0.5);
+			sound-in: ui.button.over;
+		}
+
+		&:active
+		{
+			border-color: rgba(79, 114, 245, 0.3);
+		}
+	}
+
+	.card-art
+	{
+		width: 100%;
+		height: 200px;
+		flex-shrink: 0;
+		background-color: #080a12;
+		align-items: center;
+		justify-content: center;
+		position: relative;
+		overflow: hidden;
+		border-radius: 4px 4px 0 0;
+
+		Image.card-thumb
+		{
+			position: absolute;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+			background-size: cover;
+			background-repeat: no-repeat;
+			background-position: center;
+			pointer-events: none;
+		}
+	}
+
+	.card-no-art
+	{
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		width: 100%;
+		height: 100%;
+	}
+
+	.card-no-art-icon
+	{
+		font-family: "Material Icons";
+		font-size: 52px;
+		color: rgba(79, 114, 245, 0.25);
+	}
+
+	.card-region-badge
+	{
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		background-color: rgba(0, 0, 0, 0.72);
+		border-radius: 4px;
+		padding: 2px 7px;
+		font-size: 10px;
+		font-weight: 600;
+		color: rgba(255, 255, 255, 0.8);
+		letter-spacing: 0.4px;
+	}
+
+	.card-launch-overlay
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		background-color: rgba(0, 0, 0, 0);
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		transition: opacity 0.2s ease, background-color 0.2s ease;
+	}
+
+	.card-launch-icon
+	{
+		font-family: "Material Icons";
+		font-size: 52px;
+		color: white;
+		transform: scale(0.6);
+		opacity: 0;
+		transition: transform 0.2s ease, opacity 0.2s ease;
+	}
+
+	.cell.hovered .card-launch-overlay
+	{
+		opacity: 1;
+		background-color: rgba(0, 0, 0, 0.42);
+	}
+
+	.cell.hovered .card-launch-icon
+	{
+		opacity: 1;
+		transform: scale(1);
+	}
+
+	.card-info
+	{
+		flex-direction: column;
+		padding: 10px 12px 12px 12px;
+		gap: 4px;
+		flex: 1;
+		border-top: 1px solid rgba(255, 255, 255, 0.07);
+	}
+
+	.card-title
+	{
+		font-size: 12px;
+		font-weight: 600;
+		color: rgba(255, 255, 255, 0.95);
+	}
+
+	.card-publisher
+	{
+		font-size: 10px;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.5);
+		flex-shrink: 1;
+		overflow: hidden;
+		white-space: nowrap;
+	}
+}

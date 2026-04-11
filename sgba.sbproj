@@ -1,11 +1,11 @@
 {
   "Title": "sGBA",
   "Type": "game",
-  "Org": "softsplit",
+  "Org": "asphaltian",
   "Ident": "sgba",
   "Schema": 1,
   "IncludeSourceFiles": false,
-  "Resources": null,
+  "Resources": "/ui/*",
   "PackageReferences": [],
   "EditorReferences": null,
   "Mounts": null,
