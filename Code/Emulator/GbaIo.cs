@@ -18,6 +18,7 @@ public class GbaIo
 
 	private const int IrqDelayBase = 7;
 	private long _irqFireCycle = long.MaxValue;
+	private int _irqRearmDelay;
 
 	private ushort _fifoALatch;
 	private ushort _fifoBLatch;
@@ -60,6 +61,7 @@ public class GbaIo
 		PostFlg = 0;
 		HaltPending = false;
 		_irqFireCycle = long.MaxValue;
+		_irqRearmDelay = 0;
 	}
 
 	public void RaiseIrq( GbaIrq irq, int cyclesLate = 0 )
@@ -76,13 +78,18 @@ public class GbaIo
 
 		if ( (IE & IF) != 0 && _irqFireCycle == long.MaxValue )
 		{
-			_irqFireCycle = Gba.Cpu.Cycles - cyclesLate + IrqDelayBase;
+			_irqFireCycle = Gba.Cpu.Cycles + _irqRearmDelay - cyclesLate + IrqDelayBase;
 		}
 	}
 
 	public long NextIrqEvent => _irqFireCycle;
 
-	public void TickIrqDelay( int cycles )
+	public void BeginEventProcessing()
+	{
+		_irqRearmDelay = 0;
+	}
+
+	public void ProcessIrqEvent()
 	{
 		if ( _irqFireCycle == long.MaxValue ) return;
 
@@ -93,8 +100,14 @@ public class GbaIo
 			if ( IME != 0 && (IE & IF) != 0 && !Gba.Cpu.IrqDisable )
 			{
 				Gba.Cpu.IrqPending = true;
+				_irqRearmDelay = 2;
 			}
 		}
+	}
+
+	public void EndEventProcessing()
+	{
+		_irqRearmDelay = 0;
 	}
 
 	public void TestIrq( int cyclesLate = 0 )

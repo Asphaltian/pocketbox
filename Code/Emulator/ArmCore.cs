@@ -4,8 +4,8 @@ namespace sGBA;
 
 public partial class ArmCore
 {
-	private const uint PsrUserMask  = 0xF0000000u;
-	private const uint PsrPrivMask  = 0x000000CFu;
+	private const uint PsrUserMask = 0xF0000000u;
+	private const uint PsrPrivMask = 0x000000CFu;
 	private const uint PsrStateMask = 0x00000020u;
 
 	public uint[] Gprs = new uint[16];
@@ -41,6 +41,7 @@ public partial class ArmCore
 	private uint _prefetch0;
 	private uint _prefetch1;
 	private bool _prefetchFlushed = true;
+	private bool _pipelineCyclesPrecharged;
 
 	public Gba Gba { get; }
 	private readonly GbaMemory Memory;
@@ -64,6 +65,7 @@ public partial class ArmCore
 		Halted = false;
 		IrqPending = false;
 		_prefetchFlushed = true;
+		_pipelineCyclesPrecharged = false;
 		Cycles = 0;
 
 		for ( int i = 0; i < 6; i++ )
@@ -112,27 +114,42 @@ public partial class ArmCore
 		if ( Halted )
 			return;
 
-		var timers = Gba.Timers;
-		var apu = Gba.Audio;
-		var io = Gba.Io;
 		var dma = Gba.Dma;
 
 		while ( Cycles < targetCycles )
 		{
 			long cyclesBefore = Cycles;
+			Gba.ProcessEvents( Cycles, Cycles );
+
+			if ( Halted || CrashDetected || (dma.ActiveDma >= 0 && dma.Channels[dma.ActiveDma].When <= Cycles) )
+				return;
 
 			if ( _prefetchFlushed )
 			{
+				long flushStart = Cycles;
 				FlushPipeline();
 				_prefetchFlushed = false;
+				Gba.ProcessEvents( flushStart, Cycles );
+
+				if ( Halted || CrashDetected || (dma.ActiveDma >= 0 && dma.Channels[dma.ActiveDma].When <= Cycles) )
+					return;
+
+				continue;
 			}
 
 			if ( IrqPending && !IrqDisable )
 			{
+				long irqStart = Cycles;
 				RaiseIrq();
 				IrqPending = false;
 				FlushPipeline();
 				_prefetchFlushed = false;
+				Gba.ProcessEvents( irqStart, Cycles );
+
+				if ( Halted || CrashDetected || (dma.ActiveDma >= 0 && dma.Channels[dma.ActiveDma].When <= Cycles) )
+					return;
+
+				continue;
 			}
 
 			uint instrAddr = ThumbMode ? Gprs[15] - 4 : Gprs[15] - 8;
@@ -159,16 +176,15 @@ public partial class ArmCore
 			else
 				ExecuteArm();
 
-			int delta = (int)(Cycles - cyclesBefore);
-			timers.Tick( delta );
-			apu.Tick( delta );
-			io.FinishSioTransfer();
-			io.TickIrqDelay( delta );
+			if ( _prefetchFlushed )
+				PrechargePipelineCycles();
+
+			Gba.ProcessEvents( cyclesBefore, Cycles );
 
 			if ( Halted || CrashDetected )
 				return;
 
-			if ( dma.ActiveDma >= 0 )
+			if ( dma.ActiveDma >= 0 && dma.Channels[dma.ActiveDma].When <= Cycles )
 				return;
 		}
 	}
@@ -201,16 +217,36 @@ public partial class ArmCore
 			Gprs[15] += 4;
 		}
 
+		if ( !_pipelineCyclesPrecharged )
+		{
+			int region = (int)((Gprs[15] >> 24) & 0xF);
+			if ( ThumbMode )
+				Cycles += 2 + Memory.WaitstatesNonseq16[region] + Memory.WaitstatesSeq16[region];
+			else
+				Cycles += 2 + Memory.WaitstatesNonseq32[region] + Memory.WaitstatesSeq32[region];
+		}
+
+		_pipelineCyclesPrecharged = false;
+	}
+
+	public void PrechargePipelineCycles()
+	{
+		if ( _pipelineCyclesPrecharged )
+			return;
+
 		int region = (int)((Gprs[15] >> 24) & 0xF);
 		if ( ThumbMode )
 			Cycles += 2 + Memory.WaitstatesNonseq16[region] + Memory.WaitstatesSeq16[region];
 		else
 			Cycles += 2 + Memory.WaitstatesNonseq32[region] + Memory.WaitstatesSeq32[region];
+
+		_pipelineCyclesPrecharged = true;
 	}
 
 	public void SerializePipeline( BinaryWriter w )
 	{
 		w.Write( _prefetchFlushed );
+		w.Write( _pipelineCyclesPrecharged );
 		w.Write( _prefetch0 );
 		w.Write( _prefetch1 );
 	}
@@ -218,6 +254,7 @@ public partial class ArmCore
 	public void DeserializePipeline( BinaryReader r )
 	{
 		_prefetchFlushed = r.ReadBoolean();
+		_pipelineCyclesPrecharged = r.ReadBoolean();
 		_prefetch0 = r.ReadUInt32();
 		_prefetch1 = r.ReadUInt32();
 	}
@@ -264,8 +301,7 @@ public partial class ArmCore
 		if ( newMode != PrivilegeMode && IsValidMode( newMode ) )
 			SetPrivilegeMode( newMode );
 
-		if ( wasIrqDisabled && !IrqDisable )
-			Gba.Io.TestIrq();
+		Gba.Io.TestIrq();
 	}
 
 	private static bool IsValidMode( PrivilegeMode mode )

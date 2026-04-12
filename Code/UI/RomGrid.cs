@@ -13,9 +13,9 @@ internal sealed class RomGridLayout
 	private int _columns;
 	private int _updateHash;
 
-	public float ItemWidth  { get => _itemWidth;  set => _itemWidth  = MathF.Max( 1f, value ); }
+	public float ItemWidth { get => _itemWidth; set => _itemWidth = MathF.Max( 1f, value ); }
 	public float ItemHeight { get => _itemHeight; set => _itemHeight = MathF.Max( 1f, value ); }
-	public Vector2 Spacing  { get; set; } = 0;
+	public Vector2 Spacing { get; set; } = 0;
 
 	public bool Update( Sandbox.UI.Box box, float scaleFromScreen, float scrollOffset )
 	{
@@ -23,10 +23,10 @@ internal sealed class RomGridLayout
 		if ( hash == _updateHash ) return false;
 		_updateHash = hash;
 
-		_box             = box;
+		_box = box;
 		_scaleFromScreen = scaleFromScreen;
-		_scrollOffset    = scrollOffset;
-		_cellSize        = new Vector2( _itemWidth, _itemHeight );
+		_scrollOffset = scrollOffset;
+		_cellSize = new Vector2( _itemWidth, _itemHeight );
 
 		var inner = box.RectInner;
 		inner.Position = box.RectInner.Position - box.Rect.Position;
@@ -47,15 +47,15 @@ internal sealed class RomGridLayout
 	{
 		var inner = _box.RectInner;
 		inner.Position = _box.RectInner.Position - _box.Rect.Position;
-		var rect       = inner * _scaleFromScreen;
-		var outerRect  = _box.Rect * _scaleFromScreen;
+		var rect = inner * _scaleFromScreen;
+		var outerRect = _box.Rect * _scaleFromScreen;
 
 		float rowStep = MathF.Max( 1f, _cellSize.y + Spacing.y );
-		int topRow    = ((_scrollOffset - rect.Top) / rowStep).FloorToInt();
+		int topRow = ((_scrollOffset - rect.Top) / rowStep).FloorToInt();
 		if ( topRow < 0 ) topRow = 0;
-		int rowsFit   = (outerRect.Height / rowStep).CeilToInt() + 1;
+		int rowsFit = (outerRect.Height / rowStep).CeilToInt() + 1;
 
-		first   = Math.Max( 0, topRow * _columns );
+		first = Math.Max( 0, topRow * _columns );
 		pastEnd = first + rowsFit * _columns;
 	}
 
@@ -65,14 +65,14 @@ internal sealed class RomGridLayout
 		inner.Position = _box.RectInner.Position - _box.Rect.Position;
 		var rect = inner * _scaleFromScreen;
 
-		int col   = index % _columns;
-		int row   = index / _columns;
+		int col = index % _columns;
+		int row = index / _columns;
 		float stepX = _cellSize.x + Spacing.x;
 		float stepY = _cellSize.y + Spacing.y;
 
-		panel.Style.Left   = rect.Left + col * stepX;
-		panel.Style.Top    = rect.Top  + row * stepY;
-		panel.Style.Width  = _cellSize.x;
+		panel.Style.Left = rect.Left + col * stepX;
+		panel.Style.Top = rect.Top + row * stepY;
+		panel.Style.Width = _cellSize.x;
 		panel.Style.Height = _cellSize.y;
 		panel.Style.Dirty();
 	}
@@ -82,12 +82,12 @@ internal sealed class RomGridLayout
 		if ( _box is null || _box.Rect.Width == 0 ) return 0f;
 		var inner = _box.RectInner;
 		inner.Position = _box.RectInner.Position - _box.Rect.Position;
-		var rect      = inner * _scaleFromScreen;
+		var rect = inner * _scaleFromScreen;
 		var outerRect = _box.Rect * _scaleFromScreen;
 
-		float rowStep  = _cellSize.y + Spacing.y;
+		float rowStep = _cellSize.y + Spacing.y;
 		if ( rowStep <= 0f ) return MathF.Max( 0f, outerRect.Height - rect.Height );
-		float rows     = MathF.Ceiling( count / (float)_columns );
+		float rows = MathF.Ceiling( count / (float)_columns );
 		float paddingY = outerRect.Height - rect.Height;
 		return rows * rowStep + MathF.Max( 0f, paddingY );
 	}
@@ -98,9 +98,9 @@ internal sealed class RomGridLayout
 	{
 		var inner = _box.RectInner;
 		inner.Position = _box.RectInner.Position - _box.Rect.Position;
-		var rect   = inner * _scaleFromScreen;
+		var rect = inner * _scaleFromScreen;
 
-		int row     = index / (_columns < 1 ? 1 : _columns);
+		int row = index / (_columns < 1 ? 1 : _columns);
 		float rowStep = _cellSize.y + Spacing.y;
 		float cellTop = rect.Top + row * rowStep;
 
@@ -113,15 +113,15 @@ internal sealed class RomGridLayout
 public sealed class RomGrid : Sandbox.UI.Panel
 {
 	private readonly RomGridLayout _layout = new();
-	private readonly Dictionary<int, object> _cellData   = new();
+	private readonly Dictionary<int, object> _cellData = new();
 	private readonly Dictionary<int, Sandbox.UI.Panel> _created = new();
-	private readonly List<int>    _removals = new();
-	private readonly List<object> _items    = new();
+	private readonly List<int> _removals = new();
+	private readonly List<object> _items = new();
 
 	private IList _sourceList;
-	private int   _sourceListCount;
-	private bool  _needsRebuild;
-	private bool  _lastCellCreated;
+	private int _sourceListCount;
+	private bool _needsRebuild;
+	private bool _lastCellCreated;
 	private float _targetScrollY = float.NaN;
 
 	public int HoveredIndex { get; set; } = -1;
@@ -190,7 +190,7 @@ public sealed class RomGrid : Sandbox.UI.Panel
 
 			_items.Clear();
 			_items.AddRange( mat );
-			_needsRebuild    = true;
+			_needsRebuild = true;
 			_lastCellCreated = false;
 			StateHasChanged();
 		}
@@ -199,15 +199,15 @@ public sealed class RomGrid : Sandbox.UI.Panel
 	public RomGrid()
 	{
 		Style.Position = Sandbox.UI.PositionMode.Relative;
-		Style.Overflow  = Sandbox.UI.OverflowMode.Scroll;
+		Style.Overflow = Sandbox.UI.OverflowMode.Scroll;
 	}
 
 	public void Clear()
 	{
 		_items.Clear();
-		_sourceList      = null;
+		_sourceList = null;
 		_sourceListCount = 0;
-		_needsRebuild    = true;
+		_needsRebuild = true;
 		foreach ( var p in _created.Values ) p.Delete( true );
 		_created.Clear();
 		_cellData.Clear();
@@ -219,7 +219,7 @@ public sealed class RomGrid : Sandbox.UI.Panel
 		_items.Clear();
 		_sourceListCount = _sourceList.Count;
 		foreach ( var x in _sourceList ) _items.Add( x );
-		_needsRebuild    = true;
+		_needsRebuild = true;
 		_lastCellCreated = false;
 		StateHasChanged();
 	}
@@ -233,7 +233,7 @@ public sealed class RomGrid : Sandbox.UI.Panel
 		CheckSourceForChanges();
 
 		var colGap = ComputedStyle.ColumnGap?.Value ?? 0f;
-		var rowGap  = ComputedStyle.RowGap?.Value  ?? 0f;
+		var rowGap = ComputedStyle.RowGap?.Value ?? 0f;
 		_layout.Spacing = new Vector2( colGap, rowGap );
 
 		bool layoutChanged = _layout.Update( Box, ScaleFromScreen, ScrollOffset.y * ScaleFromScreen );
@@ -261,10 +261,10 @@ public sealed class RomGrid : Sandbox.UI.Panel
 		if ( !UseMouseHover && HoveredIndex >= 0 && HoveredIndex < _items.Count )
 		{
 			var (cellTop, cellBottom) = _layout.GetCellRowBounds( HoveredIndex );
-			float viewH   = _layout.ViewportHeight( Box );
+			float viewH = _layout.ViewportHeight( Box );
 			float scrollY = ScrollOffset.y;
 
-			float padTop = (Box.RectInner.Top  - Box.Rect.Top)    / ScaleFromScreen;
+			float padTop = (Box.RectInner.Top - Box.Rect.Top) / ScaleFromScreen;
 			float padBot = (Box.Rect.Bottom - Box.RectInner.Bottom) / ScaleFromScreen;
 
 			if ( cellTop - padTop < scrollY )
@@ -276,10 +276,10 @@ public sealed class RomGrid : Sandbox.UI.Panel
 		if ( !float.IsNaN( _targetScrollY ) )
 		{
 			float current = ScrollOffset.y;
-			float next    = current + (_targetScrollY - current) * MathF.Min( 1f, Time.Delta * 18f );
+			float next = current + (_targetScrollY - current) * MathF.Min( 1f, Time.Delta * 18f );
 			if ( MathF.Abs( next - _targetScrollY ) < 0.5f )
 			{
-				next           = _targetScrollY;
+				next = _targetScrollY;
 				_targetScrollY = float.NaN;
 			}
 			ScrollOffset = new Vector2( ScrollOffset.x, next );
@@ -293,7 +293,7 @@ public sealed class RomGrid : Sandbox.UI.Panel
 
 		var rect = Box.Rect;
 		rect.Position -= ScrollOffset;
-		rect.Height    = MathF.Max( _layout.GetHeight( _items.Count ) * ScaleToScreen, rect.Height );
+		rect.Height = MathF.Max( _layout.GetHeight( _items.Count ) * ScaleToScreen, rect.Height );
 		ConstrainScrolling( rect.Size );
 	}
 
@@ -322,10 +322,10 @@ public sealed class RomGrid : Sandbox.UI.Panel
 		if ( !_created.TryGetValue( i, out var panel ) || needRebuild )
 		{
 			panel?.Delete( true );
-			panel              = Add.Panel( "cell" );
+			panel = Add.Panel( "cell" );
 			panel.Style.Position = Sandbox.UI.PositionMode.Absolute;
 			panel.ChildContent = Item?.Invoke( data );
-			_created[i]  = panel;
+			_created[i] = panel;
 			_cellData[i] = data;
 
 			if ( _items.Count - 1 == i && !_lastCellCreated )

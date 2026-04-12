@@ -707,9 +707,6 @@ public partial class ArmCore
 		}
 		else
 		{
-			bool oldThumb = ThumbMode;
-			bool wasIrqDisabled = IrqDisable;
-
 			if ( (mask & PsrUserMask) != 0 )
 			{
 				FlagN = (operand & 0x80000000u) != 0;
@@ -728,10 +725,16 @@ public partial class ArmCore
 				FiqDisable = (operand & 0x40u) != 0;
 			}
 
-			if ( wasIrqDisabled && !IrqDisable )
-				Gba.Io.TestIrq();
-			if ( oldThumb != ThumbMode )
+			Gba.Io.TestIrq();
+
+			if ( ThumbMode )
 				_prefetchFlushed = true;
+			else
+			{
+				_prefetch0 = Memory.Load32( Gprs[15] - 4 );
+				_prefetch1 = Memory.Load32( Gprs[15] );
+				OpenBusPrefetch = _prefetch1;
+			}
 		}
 	}
 }
