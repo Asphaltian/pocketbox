@@ -13,11 +13,6 @@ FEATURES
 {
 }
 
-COMMON
-{
-	#include "system.fxc"
-}
-
 CS
 {
 	#include "gba_common.hlsl"
@@ -96,7 +91,7 @@ CS
 
 		int2 coord = AffineInterpolate( am0, am1, am2, am3, ao0, ao1, ao2, ao3, inX, inY, firstAffine );
 
-		int sizeAdjusted = ( 0x8000 << (int)size ) - 1;
+		int sizeAdjusted = (int)( ( 0x8000u << size ) - 1u );
 		if ( overflow )
 		{
 			coord &= sizeAdjusted;

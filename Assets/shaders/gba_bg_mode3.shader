@@ -13,11 +13,6 @@ FEATURES
 {
 }
 
-COMMON
-{
-	#include "system.fxc"
-}
-
 CS
 {
 	#include "gba_common.hlsl"
