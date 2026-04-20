@@ -70,8 +70,9 @@
 	private const int MenuControls = 3;
 	private const int MenuReset = 4;
 	private const int MenuGoToLibrary = 5;
+	private const int MenuLeaveSession = 6;
 
-	private readonly string[] MenuItems =
+	private readonly string[] MenuItemsSolo =
 	[
 		"#pause.continue",
 		"#pause.load",
@@ -81,10 +82,20 @@
 		"#pause.library"
 	];
 
+	private readonly string[] MenuItemsInSession =
+	[
+		"#pause.continue",
+		"#pause.controls",
+		"#pause.leavesession"
+	];
+
+	private string[] MenuItems => NetworkManager.Current?.IsActive == true ? MenuItemsInSession : MenuItemsSolo;
+
 	public bool IsVisible { get; private set; }
 	private int _selectedIndex;
-	private bool HasSlotPanel => _selectedIndex is MenuLoad or MenuCreate;
-	private bool IsLoadMode => _selectedIndex == MenuLoad;
+	private string SelectedKey => _selectedIndex >= 0 && _selectedIndex < MenuItems.Length ? MenuItems[_selectedIndex] : null;
+	private bool HasSlotPanel => SelectedKey is "#pause.load" or "#pause.create";
+	private bool IsLoadMode => SelectedKey == "#pause.load";
 
 	private bool _inSlotPanel;
 	private int _highlightedSlot = 1;
@@ -99,14 +110,7 @@
 	private int _pendingOverwriteSlot;
 	private bool _showSavingDialog;
 
-	private bool _useGamepad;
-	private const float StickDeadzone = 0.1f;
-	private bool _stickUp, _stickDown, _stickLeft, _stickRight;
-
-	private const float RepeatDelay = 0.4f;
-	private const float RepeatRate = 0.08f;
-	private float _upHoldTime, _upNextRepeat;
-	private float _downHoldTime, _downNextRepeat;
+	private readonly GamepadFocusInput _input = new();
 
 	protected override void OnUpdate()
 	{
@@ -136,19 +140,18 @@
 
 		if (_showSavingDialog) return;
 
-		DetectMouseUsage();
-		ReadStickEdges(out var upEdge, out var downEdge, out var leftEdge, out var rightEdge);
+		var nav = _input.TickRepeating();
 
-		HandleVerticalRepeat("GBA_Up", upEdge, _stickUp, ref _upHoldTime, ref _upNextRepeat, NavigateUp);
-		HandleVerticalRepeat("GBA_Down", downEdge, _stickDown, ref _downHoldTime, ref _downNextRepeat, NavigateDown);
+		if (nav.Up) NavigateUp();
+		if (nav.Down) NavigateDown();
 
-		if (Input.Pressed("GBA_Right") || rightEdge)
+		if (nav.Right)
 		{
 			if (!_inSlotPanel && HasSlotPanel)
 				EnterSlotPanel();
 		}
 
-		if (Input.Pressed("GBA_Left") || leftEdge)
+		if (nav.Left)
 		{
 			if (_inSlotPanel)
 				ExitSlotPanel();
@@ -179,65 +182,7 @@
 		}
 	}
 
-	private void ReadStickEdges(out bool upEdge, out bool downEdge, out bool leftEdge, out bool rightEdge)
-	{
-		float sx = Input.GetAnalog(InputAnalog.LeftStickX);
-		float sy = Input.GetAnalog(InputAnalog.LeftStickY);
-
-		bool up = sy < -StickDeadzone;
-		bool down = sy > StickDeadzone;
-		bool left = sx < -StickDeadzone;
-		bool right = sx > StickDeadzone;
-
-		upEdge = up && !_stickUp;
-		downEdge = down && !_stickDown;
-		leftEdge = left && !_stickLeft;
-		rightEdge = right && !_stickRight;
-
-		_stickUp = up;
-		_stickDown = down;
-		_stickLeft = left;
-		_stickRight = right;
-	}
-
-	private void HandleVerticalRepeat(string action, bool stickEdge, bool stickHeld,
-		ref float holdTime, ref float nextRepeat, Action navigate)
-	{
-		if (Input.Pressed(action) || stickEdge)
-		{
-			holdTime = 0;
-			nextRepeat = RepeatDelay;
-			navigate();
-		}
-		else if (Input.Down(action) || stickHeld)
-		{
-			holdTime += Time.Delta;
-			if (holdTime >= nextRepeat)
-			{
-				nextRepeat += RepeatRate;
-				navigate();
-			}
-		}
-		else
-		{
-			holdTime = 0;
-		}
-	}
-
-	private void SetGamepadMode()
-	{
-		_useGamepad = true;
-		Mouse.Visibility = MouseVisibility.Hidden;
-	}
-
-	private void DetectMouseUsage()
-	{
-		if (Mouse.Delta.Length > 5)
-		{
-			_useGamepad = false;
-			Mouse.Visibility = MouseVisibility.Visible;
-		}
-	}
+	private void SetGamepadMode() => _input.ForceGamepadMode();
 
 	private void NavigateUp()
 	{
@@ -283,8 +228,7 @@
 		_selectedIndex = 0;
 		_inSlotPanel = false;
 		_highlightedSlot = 1;
-		_stickUp = _stickDown = _stickLeft = _stickRight = false;
-		SetGamepadMode();
+		_input.Begin(useGamepad: true);
 		Sound.Play("ui.popup.message.open");
 		EmulatorComponent.Current.SetPaused(true);
 		RefreshSlotPreviews();
@@ -295,6 +239,7 @@
 		IsVisible = false;
 		_selectedIndex = MenuContinue;
 		_inSlotPanel = false;
+		_input.End();
 		Mouse.Visibility = MouseVisibility.Hidden;
 		Sound.Play("ui.popup.message.close");
 		EmulatorComponent.Current.SetPaused(false);
@@ -310,30 +255,36 @@
 
 	private void ActivateItem(int index)
 	{
-		switch (index)
+		if (index < 0 || index >= MenuItems.Length) return;
+
+		switch (MenuItems[index])
 		{
-			case MenuContinue:
+			case "#pause.continue":
 				Resume();
 				break;
-			case MenuLoad:
-			case MenuCreate:
+			case "#pause.load":
+			case "#pause.create":
 				SelectItem(index);
 				_inSlotPanel = true;
 				break;
-			case MenuControls:
+			case "#pause.controls":
 				Game.Overlay.ShowBinds();
 				break;
-			case MenuReset:
+			case "#pause.reset":
 				EmulatorComponent.Current.ResetEmulator();
 				Resume();
 				break;
-			case MenuGoToLibrary:
+			case "#pause.library":
 				IsVisible = false;
 				_selectedIndex = MenuContinue;
 				_inSlotPanel = false;
 				Mouse.Visibility = MouseVisibility.Hidden;
 				Sound.Play("ui.popup.message.close");
 				LibraryPanel.Current?.Show();
+				break;
+			case "#pause.leavesession":
+				NetworkManager.Current?.Leave();
+				Resume();
 				break;
 		}
 	}
@@ -365,15 +316,8 @@
 
 	private void HandleConfirmInput()
 	{
-		float sy = Input.GetAnalog(InputAnalog.LeftStickY);
-		bool up = sy < -StickDeadzone;
-		bool down = sy > StickDeadzone;
-		bool upEdge = up && !_stickUp;
-		bool downEdge = down && !_stickDown;
-		_stickUp = up;
-		_stickDown = down;
-
-		if (Input.Pressed("GBA_Up") || upEdge || Input.Pressed("GBA_Down") || downEdge)
+		var nav = _input.TickRepeating();
+		if (nav.Up || nav.Down)
 		{
 			SetGamepadMode();
 			Sound.Play("ui.button.over");
@@ -397,8 +341,6 @@
 			Sound.Play("ui.button.press");
 			CancelOverwrite();
 		}
-
-		DetectMouseUsage();
 	}
 
 	private void ConfirmOverwrite()
@@ -471,7 +413,7 @@
 	{
 		return HashCode.Combine(
 			IsVisible, _selectedIndex, _inSlotPanel, _highlightedSlot,
-			_useGamepad, _slotVersion, _showConfirmDialog,
+			_input.UseGamepad, _slotVersion, _showConfirmDialog,
 			HashCode.Combine(_confirmSelection, _showSavingDialog)
 		);
 	}

@@ -4,12 +4,25 @@
 	"library.empty.hint": "Place .gba files in the steamapps\\common\\sbox\\data\\asphaltian\\sgba\\roms directory",
 	"library.noresults.title": "No Results",
 	"library.noresults.hint": "No games match",
+	"library.join.button": "Join",
+
+	"sessionbrowser.title": "Join an Online Session",
+	"sessionbrowser.sub": "Lobbies hosting a Wireless Adapter game appear here.",
+	"sessionbrowser.loading": "Searching for sessions\u2026",
+	"sessionbrowser.empty": "No open sessions found.",
+	"sessionbrowser.open": "Open",
+	"sessionbrowser.full": "Full",
+	"sessionbrowser.close": "Close",
+	"sessionbrowser.refresh": "Refresh",
 
 	"settings.button": "Settings",
 	"settings.title": "Settings",
+	"settings.sub": "Tweak how the emulator looks and feels.",
 	"settings.back": "Back",
 	"settings.classicfeel": "Reproduce classic feel",
+	"settings.classicfeel.hint": "Match the visual response of original GBA hardware.",
 	"settings.smallscreen": "Display with small screen",
+	"settings.smallscreen.hint": "Render the screen at its native, smaller size.",
 
 	"pause.continue": "Continue",
 	"pause.load": "Load Suspend Point",
@@ -17,10 +30,36 @@
 	"pause.controls": "View/Change Controls",
 	"pause.reset": "Reset Game",
 	"pause.library": "To Game Selection",
+	"pause.leavesession": "Quit Online Session",
 	"pause.slot.empty": "No data.",
 	"pause.slot.label": "Save slot #",
 	"pause.confirm.message": "Overwrite this data?",
 	"pause.confirm.yes": "Yes",
 	"pause.confirm.no": "No",
-	"pause.saving": "Saving..."
+	"pause.saving": "Saving...",
+
+	"wireless.players": "Linked Players",
+	"wireless.host": "HOST",
+	"wireless.ready": "Ready",
+	"wireless.waiting": "Not ready",
+	"wireless.slot.empty": "Waiting for player\u2026",
+
+	"hostwireless.visibility": "Who can join",
+	"hostwireless.cancel": "Cancel",
+	"hostwireless.host": "Start Hosting",
+	"hostwireless.vis.public": "Public",
+	"hostwireless.vis.public.hint": "Anyone can find and join from the session browser.",
+	"hostwireless.vis.friends": "Friends Only",
+	"hostwireless.vis.friends.hint": "Only your Steam friends can join.",
+	"hostwireless.vis.invite": "Invite Only",
+	"hostwireless.vis.invite.hint": "Players need a direct invite from you.",
+
+	"library.host": "Host",
+
+	"prompt.launch": "Launch",
+	"prompt.host": "Host Online Session",
+	"prompt.navigate": "Navigate",
+	"prompt.adjust": "Adjust",
+	"prompt.confirm": "Confirm",
+	"prompt.back": "Back"
 }

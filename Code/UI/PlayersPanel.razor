@@ -1,0 +1,82 @@
+@using Sandbox.UI
+
+@namespace sGBA
+
+@inherits PanelComponent
+
+<root class="@(IsActive ? "visible" : "") @(IsPaused ? "paused" : "")">
+	@if (Session is not null)
+	{
+		@for (int i = 0; i < NetworkManager.MaxPlayers; i++)
+		{
+			var slot = i;
+			var player = slot < Session.Players.Count ? Session.Players[slot] : null;
+
+			<div class="player-card @(player is not null ? "filled" : "empty") @(player?.IsLocal == true ? "local" : "")">
+				@if (player is not null)
+				{
+					<img class="avatar" src="avatar:@player.SteamId" />
+				}
+				else
+				{
+					<div class="avatar empty"><i>person_add</i></div>
+				}
+
+				<div class="info">
+					<div class="slot-tag">P@(slot + 1)@(player?.IsHost == true ? " \u00b7 host" : "")</div>
+					@if (player is not null)
+					{
+						<div class="name">@player.DisplayName</div>
+					}
+					else
+					{
+						<div class="empty-label">#wireless.slot.empty</div>
+					}
+				</div>
+
+				@if (player is not null)
+				{
+					<div class="ping">@player.Ping ms</div>
+				}
+			</div>
+		}
+	}
+</root>
+
+@code
+{
+	private NetworkManager Session => NetworkManager.Current;
+	private bool IsActive => Session?.IsActive ?? false;
+	private PauseMenu _pause;
+	private bool IsPaused
+	{
+		get
+		{
+			_pause ??= Scene?.GetAllComponents<PauseMenu>().FirstOrDefault();
+			return _pause?.IsVisible ?? false;
+		}
+	}
+
+	protected override int BuildHash() => HashCode.Combine(
+		IsActive,
+		IsPaused,
+		NetworkManager.MaxPlayers,
+		Session?.RomTitle,
+		Session?.Players.Count ?? 0,
+		PlayerHash()
+	);
+
+	private int PlayerHash()
+	{
+		if (Session is null) return 0;
+		var hash = new HashCode();
+		foreach (var p in Session.Players)
+		{
+			hash.Add(p.Id);
+			hash.Add(p.SteamId);
+			hash.Add(p.Ready);
+			hash.Add(p.Ping / 25);
+		}
+		return hash.ToHashCode();
+	}
+}

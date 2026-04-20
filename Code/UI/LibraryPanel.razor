@@ -1,4 +1,5 @@
 @using Sandbox.UI
+@using sGBA
 @using System.Threading.Tasks
 
 @namespace sGBA
@@ -20,6 +21,10 @@
 					<div class="@SearchBarClass" onmouseenter=@(() => SelectHeaderAction(HeaderSearch))>
 						<div class="lib-search-icon">search</div>
 						<TextEntry @ref="_searchEntry" placeholder="#library.search.placeholder" OnTextEdited=@OnSearchEdited onfocus=@OnSearchFocused onblur=@OnSearchBlurred class="lib-search-input" />
+					</div>
+					<div class="@JoinButtonClass" onmouseenter=@(() => SelectHeaderAction(HeaderJoin)) onclick=@(() => OpenSessionBrowser())>
+						<div class="lib-header-button-icon">groups</div>
+						<div class="lib-header-button-label">#library.join.button</div>
 					</div>
 					<div class="@SettingsButtonClass" onmouseenter=@(() => SelectHeaderAction(HeaderSettings)) onclick=@(() => OpenSettings())>
 						<div class="lib-header-button-icon">settings</div>
@@ -85,6 +90,13 @@
 									<div class="card-launch-icon">play_arrow</div>
 								</div>
 
+								@if (rom.SupportsWirelessAdapter)
+								{
+									<div class="card-host-btn" tooltip="#library.host" onclick=@((e) => { e.StopPropagation(); HostRom(rom); })>
+										<div class="card-host-icon">groups</div>
+									</div>
+								}
+
 							</div>
 
 							<div class="card-info">
@@ -100,6 +112,14 @@
 				</RomGrid>
 			}
 
+		</div>
+
+		<div class="lib-footer">
+			<div class="prompt"><InputHint Action="GBA_A" /><div class="label">#prompt.launch</div></div>
+			@if (HoveredRomSupportsHosting)
+			{
+				<div class="prompt"><InputHint Action="GBA_Select" /><div class="label">#prompt.host</div></div>
+			}
 		</div>
 	</div>
 </root>
@@ -124,18 +144,11 @@
 	private bool _isVisible = true;
 	private int _headerSelection = -1;
 
-	private const float StickDeadzone = 0.1f;
-	private const float RepeatDelay = 0.4f;
-	private const float RepeatRate = 0.08f;
 	private const int HeaderSearch = 0;
-	private const int HeaderSettings = 1;
+	private const int HeaderJoin = 1;
+	private const int HeaderSettings = 2;
 
-	private bool _useGamepad;
-	private bool _stickUp, _stickDown, _stickLeft, _stickRight;
-	private float _upHoldTime, _upNextRepeat;
-	private float _downHoldTime, _downNextRepeat;
-	private float _leftHoldTime, _leftNextRepeat;
-	private float _rightHoldTime, _rightNextRepeat;
+	private readonly GamepadFocusInput _input = new();
 
 	private int ColumnCount => _grid?.Columns is > 0 ? _grid.Columns : Math.Max(1, (int)((Screen.Width - 96f) / (200f + 18f)));
 
@@ -191,8 +204,7 @@
 		_isVisible = true;
 		SetHovered(-1);
 		_headerSelection = -1;
-		_useGamepad = false;
-		Mouse.Visibility = MouseVisibility.Visible;
+		_input.Begin(useGamepad: false);
 		Sound.Play("ui.popup.message.open");
 		StateHasChanged();
 	}
@@ -205,6 +217,12 @@
 	}
 
 	private void OnRomCellClick(int i) => LaunchRom(_filteredRoms[i]);
+
+	private void HostRom(RomEntry rom, bool useGamepad = false)
+	{
+		Sound.Play("ui.button.press");
+		HostDialog.Current?.Open(rom, useGamepad);
+	}
 
 	private void LaunchRom(RomEntry rom)
 	{
@@ -231,6 +249,19 @@
 
 	private string SettingsButtonClass => "lib-header-button"
 		+ (_headerSelection == HeaderSettings ? " selected" : "");
+
+	private bool HoveredRomSupportsHosting =>
+		_input.UseGamepad && _hoveredIndex >= 0 && _hoveredIndex < _filteredRoms.Count
+		&& _filteredRoms[_hoveredIndex].SupportsWirelessAdapter;
+
+	private string JoinButtonClass => "lib-header-button"
+		+ (_headerSelection == HeaderJoin ? " selected" : "");
+
+	private void OpenSessionBrowser()
+	{
+		Sound.Play("ui.button.press");
+		SessionBrowser.Current?.Open(_input.UseGamepad);
+	}
 
 	private void RebuildFilteredList()
 	{
@@ -271,20 +302,8 @@
 
 	private void SetGamepadMode()
 	{
-		_useGamepad = true;
+		_input.ForceGamepadMode();
 		if (_grid != null) _grid.UseMouseHover = false;
-		Mouse.Visibility = MouseVisibility.Hidden;
-	}
-
-	private void DetectMouseUsage()
-	{
-		if (Mouse.Delta.Length > 5)
-		{
-			_useGamepad = false;
-			_headerSelection = -1;
-			if (_grid != null) _grid.UseMouseHover = true;
-			Mouse.Visibility = MouseVisibility.Visible;
-		}
 	}
 
 	private void SyncVisibilityWithEmulator()
@@ -318,7 +337,7 @@
 		if (useGamepad)
 			SetGamepadMode();
 		else
-			Mouse.Visibility = MouseVisibility.Visible;
+			_input.End();
 
 		_headerSelection = HeaderSettings;
 		SetHovered(-1);
@@ -331,10 +350,10 @@
 	{
 		_headerSelection = headerSelection;
 		SetHovered(-1);
-		_useGamepad = useGamepad;
+		if (useGamepad) _input.ForceGamepadMode();
+		else _input.End();
 		if (_grid != null)
 			_grid.UseMouseHover = !useGamepad;
-		Mouse.Visibility = useGamepad ? MouseVisibility.Hidden : MouseVisibility.Visible;
 		StateHasChanged();
 	}
 
@@ -364,32 +383,23 @@
 
 		if (!_isVisible) return;
 		if (SettingsPanel.Current?.IsVisible == true) return;
+		if (HostDialog.Current?.IsVisible == true) return;
+		if (SessionBrowser.Current?.IsVisible == true) return;
+		if (new Game.Overlay().IsOpen) return;
 
-		DetectMouseUsage();
-
-		if (!_useGamepad && _grid != null)
+		if (!_input.UseGamepad && _grid != null)
 			_hoveredIndex = _grid.HoveredIndex;
 
 		if (_searchFocused) return;
 
-		ReadStickEdges(out var upEdge, out var downEdge, out var leftEdge, out var rightEdge);
+		var nav = _input.TickRepeating();
+		if (nav.Up) { SetGamepadMode(); NavigateUp(); }
+		if (nav.Down) { SetGamepadMode(); NavigateDown(); }
+		if (nav.Left) { SetGamepadMode(); NavigateLeft(); }
+		if (nav.Right) { SetGamepadMode(); NavigateRight(); }
 
-		HandleNavRepeat("GBA_Up", upEdge, _stickUp, ref _upHoldTime, ref _upNextRepeat, () =>
-		{
-			SetGamepadMode(); NavigateUp();
-		});
-		HandleNavRepeat("GBA_Down", downEdge, _stickDown, ref _downHoldTime, ref _downNextRepeat, () =>
-		{
-			SetGamepadMode(); NavigateDown();
-		});
-		HandleNavRepeat("GBA_Left", leftEdge, _stickLeft, ref _leftHoldTime, ref _leftNextRepeat, () =>
-		{
-			SetGamepadMode(); NavigateLeft();
-		});
-		HandleNavRepeat("GBA_Right", rightEdge, _stickRight, ref _rightHoldTime, ref _rightNextRepeat, () =>
-		{
-			SetGamepadMode(); NavigateRight();
-		});
+		if (!_input.UseGamepad && _headerSelection >= 0)
+			_headerSelection = -1;
 
 		if (Input.Pressed("GBA_A"))
 		{
@@ -397,6 +407,10 @@
 			if (_headerSelection == HeaderSearch)
 			{
 				_searchEntry?.Focus();
+			}
+			else if (_headerSelection == HeaderJoin)
+			{
+				OpenSessionBrowser();
 			}
 			else if (_headerSelection == HeaderSettings)
 			{
@@ -415,50 +429,15 @@
 			if (_filteredRoms.Count > 0) SetHovered(0);
 			Sound.Play("ui.button.over");
 		}
-	}
 
-	private void ReadStickEdges(out bool upEdge, out bool downEdge, out bool leftEdge, out bool rightEdge)
-	{
-		float sx = Input.GetAnalog(InputAnalog.LeftStickX);
-		float sy = Input.GetAnalog(InputAnalog.LeftStickY);
-
-		bool up = sy < -StickDeadzone;
-		bool down = sy > StickDeadzone;
-		bool left = sx < -StickDeadzone;
-		bool right = sx > StickDeadzone;
-
-		upEdge = up && !_stickUp;
-		downEdge = down && !_stickDown;
-		leftEdge = left && !_stickLeft;
-		rightEdge = right && !_stickRight;
-
-		_stickUp = up;
-		_stickDown = down;
-		_stickLeft = left;
-		_stickRight = right;
-	}
-
-	private void HandleNavRepeat(string action, bool stickEdge, bool stickHeld,
-		ref float holdTime, ref float nextRepeat, Action navigate)
-	{
-		if (Input.Pressed(action) || stickEdge)
+		if (Input.Pressed("GBA_Select") && _hoveredIndex >= 0 && _filteredRoms.Count > 0)
 		{
-			holdTime = 0;
-			nextRepeat = RepeatDelay;
-			navigate();
-		}
-		else if (Input.Down(action) || stickHeld)
-		{
-			holdTime += Time.Delta;
-			if (holdTime >= nextRepeat)
+			var rom = _filteredRoms[_hoveredIndex];
+			if (rom.SupportsWirelessAdapter)
 			{
-				nextRepeat += RepeatRate;
-				navigate();
+				SetGamepadMode();
+				HostRom(rom, useGamepad: true);
 			}
-		}
-		else
-		{
-			holdTime = 0;
 		}
 	}
 
@@ -516,7 +495,7 @@
 	protected override int BuildHash()
 	{
 		if (_isVisible)
-			return HashCode.Combine(_hoveredIndex, _filteredRoms.Count, _useGamepad, _thumbnailVersion, _searchFocused, _headerSelection);
+			return HashCode.Combine(_hoveredIndex, _filteredRoms.Count, _input.UseGamepad, _thumbnailVersion, _searchFocused, _headerSelection);
 
 		return HashCode.Combine(_isVisible);
 	}

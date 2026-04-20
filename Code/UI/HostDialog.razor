@@ -1,0 +1,220 @@
+@using Sandbox.UI
+@using sGBA
+
+@namespace sGBA
+
+@inherits PanelComponent
+
+<root class="@(IsVisible ? "visible" : "")">
+	<div class="dialog-bg" onclick=@Cancel />
+
+	<div class="dialog">
+		@if (_rom is not null)
+		{
+			<div class="dialog-header">
+				<div class="dialog-rom">@_rom.DisplayTitle</div>
+			</div>
+
+			<div class="dialog-body">
+
+				<div class="field">
+					<div class="field-label">#hostwireless.visibility</div>
+					<div class="vis-options">
+						@{ var visValues = System.Enum.GetValues<SessionVisibility>(); }
+						@for (int i = 0; i < visValues.Length; i++)
+						{
+							var v = visValues[i];
+							var idx = i;
+						<div class="vis-option @(_visibility == v ? "selected" : "") @(_input.UseGamepad && _focusGroup == FocusGroup.Visibility && _visibilityIndex == idx ? "focus" : "")"
+						 onmouseenter=@(() => OnMouseEnter(FocusGroup.Visibility, idx))
+							 onclick=@(() => SelectVisibility(v))>
+							<div class="vis-icon">@SessionVisibilityInfo.Icon(v)</div>
+							<div class="vis-text">
+								<div class="vis-name">@SessionVisibilityInfo.NameKey(v)</div>
+								<div class="vis-hint">@SessionVisibilityInfo.HintKey(v)</div>
+								</div>
+								<div class="vis-check">@(_visibility == v ? "check" : "")</div>
+							</div>
+						}
+					</div>
+				</div>
+
+			</div>
+
+			<div class="dialog-actions">
+				<div class="action-btn cancel @(_input.UseGamepad && _focusGroup == FocusGroup.Actions && _actionIndex == 0 ? "focus" : "")"
+				 onmouseenter=@(() => OnActionMouseEnter(0))
+				 onclick=@Cancel>#hostwireless.cancel</div>
+			<div class="action-btn confirm @(_input.UseGamepad && _focusGroup == FocusGroup.Actions && _actionIndex == 1 ? "focus" : "")"
+				 onmouseenter=@(() => OnActionMouseEnter(1))
+					 onclick=@Confirm>#hostwireless.host</div>
+			</div>
+		}
+	</div>
+</root>
+
+@code
+{
+	public static HostDialog Current { get; private set; }
+
+	private enum FocusGroup { Visibility, Actions }
+	private const int CancelAction = 0;
+	private const int ConfirmAction = 1;
+
+	private static readonly SessionVisibility[] VisibilityOptions = System.Enum.GetValues<SessionVisibility>();
+
+	private RomEntry _rom;
+	private SessionVisibility _visibility = SessionVisibility.FriendsOnly;
+
+	private FocusGroup _focusGroup = FocusGroup.Visibility;
+	private int _visibilityIndex = (int)SessionVisibility.FriendsOnly;
+	private int _actionIndex = ConfirmAction;
+
+	private readonly GamepadFocusInput _input = new();
+
+	public bool IsVisible => _rom is not null;
+
+	protected override void OnTreeFirstBuilt() => Current = this;
+	protected override void OnDestroy() { if (Current == this) Current = null; }
+
+	public void Open( RomEntry rom, bool useGamepad = false )
+	{
+		_rom = rom;
+		_visibility = SessionVisibility.FriendsOnly;
+		_focusGroup = FocusGroup.Visibility;
+		_visibilityIndex = (int)SessionVisibility.FriendsOnly;
+		_actionIndex = ConfirmAction;
+		_input.Begin( useGamepad );
+		Sound.Play( "ui.popup.message.open" );
+		StateHasChanged();
+	}
+
+	protected override void OnUpdate()
+	{
+		if ( !IsVisible ) return;
+		if ( new Game.Overlay().IsOpen ) return;
+
+		var anyButton = Input.Pressed( "GBA_Up" ) || Input.Pressed( "GBA_Down" )
+			|| Input.Pressed( "GBA_Left" ) || Input.Pressed( "GBA_Right" )
+			|| Input.Pressed( "GBA_A" ) || Input.Pressed( "GBA_B" );
+
+		var edges = _input.Tick( anyButton );
+
+		if ( Input.Pressed( "GBA_Up" ) || edges.Up ) NavigateUp();
+		if ( Input.Pressed( "GBA_Down" ) || edges.Down ) NavigateDown();
+		if ( Input.Pressed( "GBA_Left" ) || edges.Left ) NavigateActions( -1 );
+		if ( Input.Pressed( "GBA_Right" ) || edges.Right ) NavigateActions( +1 );
+
+		if ( Input.Pressed( "GBA_A" ) ) ActivateFocus();
+		if ( Input.Pressed( "GBA_B" ) )
+		{
+			if ( _focusGroup == FocusGroup.Visibility ) Cancel();
+			else { _focusGroup = FocusGroup.Visibility; PlayNav(); }
+		}
+	}
+
+	private void NavigateUp()
+	{
+		if ( _focusGroup == FocusGroup.Visibility )
+		{
+			if ( _visibilityIndex > 0 ) { _visibilityIndex--; PlayNav(); }
+		}
+		else
+		{
+			_focusGroup = FocusGroup.Visibility; PlayNav();
+		}
+	}
+
+	private void NavigateDown()
+	{
+		if ( _focusGroup != FocusGroup.Visibility ) return;
+		if ( _visibilityIndex < VisibilityOptions.Length - 1 ) { _visibilityIndex++; PlayNav(); }
+		else { _focusGroup = FocusGroup.Actions; PlayNav(); }
+	}
+
+	private void NavigateActions( int direction )
+	{
+		if ( _focusGroup != FocusGroup.Actions ) return;
+		var newIndex = Math.Clamp( _actionIndex + direction, 0, 1 );
+		if ( newIndex == _actionIndex ) return;
+		_actionIndex = newIndex;
+		PlayNav();
+	}
+
+	private void ActivateFocus()
+	{
+		if ( _focusGroup == FocusGroup.Visibility )
+		{
+			SelectVisibility( VisibilityOptions[_visibilityIndex] );
+			_focusGroup = FocusGroup.Actions;
+		}
+		else
+		{
+			if ( _actionIndex == CancelAction ) Cancel(); else Confirm();
+		}
+		StateHasChanged();
+	}
+
+	private void PlayNav()
+	{
+		Sound.Play( "ui.button.over" );
+		StateHasChanged();
+	}
+
+	private void OnMouseEnter( FocusGroup group, int index )
+	{
+		if ( _input.UseGamepad ) return;
+		_focusGroup = group;
+		_visibilityIndex = index;
+	}
+
+	private void OnActionMouseEnter( int index )
+	{
+		if ( _input.UseGamepad ) return;
+		_focusGroup = FocusGroup.Actions;
+		_actionIndex = index;
+	}
+
+	private void SelectVisibility( SessionVisibility v )
+	{
+		_visibility = v;
+		_visibilityIndex = (int)v;
+		Sound.Play( "ui.button.press" );
+		StateHasChanged();
+	}
+
+	private void Cancel()
+	{
+		_rom = null;
+		_input.End();
+		Sound.Play( "ui.popup.message.close" );
+		StateHasChanged();
+	}
+
+	private void Confirm()
+	{
+		if ( _rom is null ) return;
+
+		var session = NetworkManager.Current;
+		if ( session is null )
+		{
+			Log.Warning( "[sGBA] No NetworkManager in scene; cannot host." );
+			Cancel();
+			return;
+		}
+
+		if ( !session.Host( _rom, _visibility ) )
+		{
+			Log.Warning( "[sGBA] Failed to host session." );
+			return;
+		}
+
+		var rom = _rom;
+		_rom = null;
+		_input.End();
+		Sound.Play( "ui.button.press" );
+		EmulatorComponent.Current?.Restart( rom.Path );
+		LibraryPanel.Current?.Hide();
+		StateHasChanged();
+	}
+}

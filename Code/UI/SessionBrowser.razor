@@ -1,0 +1,333 @@
+@using Sandbox.UI
+@using Sandbox.Network
+@using sGBA
+@using System.Threading
+@using System.Threading.Tasks
+
+@namespace sGBA
+
+@inherits PanelComponent
+
+<root class="@(IsVisible ? "visible" : "")">
+	<div class="dialog-bg" onclick=@Close />
+
+	<div class="dialog">
+		<div class="dialog-header">
+			<div class="dialog-title">#sessionbrowser.title</div>
+			<div class="dialog-sub">#sessionbrowser.sub</div>
+		</div>
+
+		<div class="dialog-body">
+			@if (_isLoading)
+			{
+				<div class="status">
+					<i>autorenew</i>
+					<div>#sessionbrowser.loading</div>
+				</div>
+			}
+			else if (_lobbies is null || _lobbies.Count == 0)
+			{
+				<div class="status">
+					<i>wifi_off</i>
+					<div>#sessionbrowser.empty</div>
+				</div>
+			}
+			else
+			{
+				<div class="lobby-list">
+					@for (int i = 0; i < _lobbies.Count; i++)
+					{
+						var lobby = _lobbies[i];
+						var idx = i;
+						var full = lobby.IsFull;
+						var visibility = lobby.GetVisibility();
+						<div class="lobby-row @(_input.UseGamepad && _focusGroup == FocusGroup.Lobbies && _focusIndex == idx ? "focus" : "") @(full ? "full" : "")"
+						     onmouseenter=@(() => OnLobbyMouseEnter(idx))
+						     onclick=@(() => Confirm(idx))>
+							<img class="host-avatar" src="avatar:@lobby.OwnerId" />
+							<div class="lobby-text">
+								<div class="lobby-rom">@RomTitleOf(lobby)</div>
+								<div class="lobby-sub">
+									<span class="host-name">@HostNameOf(lobby)</span>
+									@if (!string.IsNullOrEmpty(lobby.GetGameCode()))
+									{
+										<span class="chip code">@lobby.GetGameCode()</span>
+									}
+									<span class="chip vis">
+										<span class="micon">@SessionVisibilityInfo.Icon(visibility)</span>@SessionVisibilityInfo.ShortLabel(visibility)
+									</span>
+								</div>
+							</div>
+							<div class="lobby-meta">
+								<div class="lobby-count">
+									<span class="micon">group</span>
+									<span class="count-text">
+										<span class="count-num">@lobby.Members</span>
+										<span class="count-sep">/</span>
+										<span class="count-num">@lobby.MaxMembers</span>
+									</span>
+								</div>
+								<div class="lobby-status @(full ? "is-full" : "is-open")">@(full ? "#sessionbrowser.full" : "#sessionbrowser.open")</div>
+							</div>
+						</div>
+					}
+				</div>
+			}
+
+			@if (!string.IsNullOrEmpty(_error))
+			{
+				<div class="error">@_error</div>
+			}
+		</div>
+
+		<div class="dialog-actions">
+			<div class="action-btn cancel @(_input.UseGamepad && _focusGroup == FocusGroup.Actions && _actionIndex == CloseAction ? "focus" : "")"
+			     onmouseenter=@(() => OnActionMouseEnter(CloseAction))
+			     onclick=@Close>#sessionbrowser.close</div>
+			<div class="action-btn refresh @(_input.UseGamepad && _focusGroup == FocusGroup.Actions && _actionIndex == RefreshAction ? "focus" : "")"
+			     onmouseenter=@(() => OnActionMouseEnter(RefreshAction))
+			     onclick=@Refresh>#sessionbrowser.refresh</div>
+		</div>
+	</div>
+</root>
+
+@code
+{
+	public static SessionBrowser Current { get; private set; }
+
+	private enum FocusGroup { Lobbies, Actions }
+	private const int CloseAction = 0;
+	private const int RefreshAction = 1;
+
+	private bool _visible;
+	private bool _isLoading;
+	private List<LobbyInformation> _lobbies;
+	private FocusGroup _focusGroup = FocusGroup.Lobbies;
+	private int _focusIndex;
+	private int _actionIndex = RefreshAction;
+	private string _error;
+	private CancellationTokenSource _queryCts;
+
+	private readonly GamepadFocusInput _input = new();
+
+	public bool IsVisible => _visible;
+
+	protected override void OnTreeFirstBuilt() => Current = this;
+
+	protected override void OnDestroy()
+	{
+		if ( Current == this ) Current = null;
+		_queryCts?.Cancel();
+		_queryCts?.Dispose();
+		_queryCts = null;
+
+		if ( NetworkManager.Current is not null )
+			NetworkManager.Current.JoinFailed -= OnJoinFailed;
+	}
+
+	public void Open( bool useGamepad = false )
+	{
+		if ( NetworkManager.Current is not null )
+		{
+			NetworkManager.Current.JoinFailed -= OnJoinFailed;
+			NetworkManager.Current.JoinFailed += OnJoinFailed;
+		}
+
+		_visible = true;
+		_error = null;
+		_focusGroup = FocusGroup.Lobbies;
+		_focusIndex = 0;
+		_actionIndex = RefreshAction;
+		_input.Begin( useGamepad );
+		Sound.Play( "ui.popup.message.open" );
+		_ = RefreshAsync();
+	}
+
+	public void Close()
+	{
+		if ( !_visible ) return;
+		_visible = false;
+		_queryCts?.Cancel();
+		_input.End();
+		Sound.Play( "ui.popup.message.close" );
+		StateHasChanged();
+	}
+
+	private void Refresh()
+	{
+		Sound.Play( "ui.button.press" );
+		_ = RefreshAsync();
+	}
+
+	private async Task RefreshAsync()
+	{
+		_queryCts?.Cancel();
+		_queryCts = new CancellationTokenSource();
+		var token = _queryCts.Token;
+
+		_isLoading = true;
+		_error = null;
+		StateHasChanged();
+
+		List<LobbyInformation> result = null;
+		try
+		{
+			result = await Networking.QueryLobbies( token );
+		}
+		catch ( OperationCanceledException ) { return; }
+		catch ( Exception e )
+		{
+			_error = e.Message;
+		}
+
+		if ( token.IsCancellationRequested ) return;
+
+		_lobbies = result?.Where( l => !l.IsHidden && !l.IsFull ).ToList() ?? new();
+		_focusIndex = Math.Clamp( _focusIndex, 0, Math.Max( 0, _lobbies.Count - 1 ) );
+		if ( _lobbies.Count == 0 && _focusGroup == FocusGroup.Lobbies )
+			_focusGroup = FocusGroup.Actions;
+		_isLoading = false;
+		StateHasChanged();
+	}
+
+	protected override void OnUpdate()
+	{
+		if ( !_visible ) return;
+		if ( new Game.Overlay().IsOpen ) return;
+
+		var anyButton = Input.Pressed( "GBA_Up" ) || Input.Pressed( "GBA_Down" )
+			|| Input.Pressed( "GBA_Left" ) || Input.Pressed( "GBA_Right" )
+			|| Input.Pressed( "GBA_A" ) || Input.Pressed( "GBA_B" )
+			|| Input.Pressed( "GBA_Start" ) || Input.Pressed( "GBA_Select" );
+
+		var edges = _input.Tick( anyButton );
+
+		if ( Input.Pressed( "GBA_B" ) )
+		{
+			if ( _focusGroup == FocusGroup.Actions && HasLobbies )
+			{
+				_focusGroup = FocusGroup.Lobbies;
+				PlayNav();
+			}
+			else
+			{
+				Close();
+			}
+			return;
+		}
+
+		if ( Input.Pressed( "GBA_Start" ) || Input.Pressed( "GBA_Select" ) )
+		{
+			Refresh();
+			return;
+		}
+
+		if ( Input.Pressed( "GBA_Up" ) || edges.Up ) NavigateUp();
+		if ( Input.Pressed( "GBA_Down" ) || edges.Down ) NavigateDown();
+		if ( Input.Pressed( "GBA_Left" ) || edges.Left ) NavigateActions( -1 );
+		if ( Input.Pressed( "GBA_Right" ) || edges.Right ) NavigateActions( +1 );
+		if ( Input.Pressed( "GBA_A" ) ) ActivateFocus();
+	}
+
+	private bool HasLobbies => _lobbies is { Count: > 0 };
+
+	private void NavigateUp()
+	{
+		if ( _focusGroup == FocusGroup.Lobbies )
+		{
+			if ( _focusIndex > 0 ) { _focusIndex--; PlayNav(); }
+		}
+		else if ( HasLobbies )
+		{
+			_focusGroup = FocusGroup.Lobbies;
+			_focusIndex = _lobbies.Count - 1;
+			PlayNav();
+		}
+	}
+
+	private void NavigateDown()
+	{
+		if ( _focusGroup != FocusGroup.Lobbies || !HasLobbies ) return;
+		if ( _focusIndex < _lobbies.Count - 1 ) { _focusIndex++; PlayNav(); }
+		else { _focusGroup = FocusGroup.Actions; PlayNav(); }
+	}
+
+	private void NavigateActions( int direction )
+	{
+		if ( _focusGroup != FocusGroup.Actions ) return;
+		var newIndex = Math.Clamp( _actionIndex + direction, 0, 1 );
+		if ( newIndex == _actionIndex ) return;
+		_actionIndex = newIndex;
+		PlayNav();
+	}
+
+	private void ActivateFocus()
+	{
+		if ( _focusGroup == FocusGroup.Lobbies ) Confirm( _focusIndex );
+		else if ( _actionIndex == CloseAction ) Close();
+		else Refresh();
+	}
+
+	private void PlayNav()
+	{
+		Sound.Play( "ui.button.over" );
+		StateHasChanged();
+	}
+
+	private void OnLobbyMouseEnter( int index )
+	{
+		if ( _input.UseGamepad ) return;
+		_focusGroup = FocusGroup.Lobbies;
+		_focusIndex = index;
+		StateHasChanged();
+	}
+
+	private void OnActionMouseEnter( int index )
+	{
+		if ( _input.UseGamepad ) return;
+		_focusGroup = FocusGroup.Actions;
+		_actionIndex = index;
+		StateHasChanged();
+	}
+
+	private void Confirm( int index )
+	{
+		if ( !HasLobbies || index < 0 || index >= _lobbies.Count ) return;
+		var lobby = _lobbies[index];
+		if ( lobby.IsFull ) return;
+
+		var session = NetworkManager.Current;
+		if ( session is null )
+		{
+			_error = "No NetworkManager in scene.";
+			StateHasChanged();
+			return;
+		}
+
+		Sound.Play( "ui.button.press" );
+		_visible = false;
+		_input.End();
+		StateHasChanged();
+		session.Join( lobby.LobbyId );
+	}
+
+	private void OnJoinFailed( string message )
+	{
+		_error = message;
+		_visible = true;
+		StateHasChanged();
+	}
+
+	private static string RomTitleOf( LobbyInformation lobby )
+	{
+		var rom = lobby.GetRomTitle();
+		if ( !string.IsNullOrEmpty( rom ) ) return rom;
+		return string.IsNullOrEmpty( lobby.Name ) ? "Untitled" : lobby.Name;
+	}
+
+	private static string HostNameOf( LobbyInformation lobby )
+	{
+		var host = lobby.GetHostName();
+		return string.IsNullOrEmpty( host ) ? "Unknown host" : host;
+	}
+}

@@ -1,78 +1,57 @@
-@using Sandbox.UI
-
 @namespace sGBA
 
 @inherits PanelComponent
 
 <root class="@(IsVisible ? "visible" : "")">
-	<div class="settings-bg" />
+	<div class="dialog-bg" onclick=@Hide />
 
-	<div class="settings-shell">
-		<div class="settings-topbar">
-			<div class="@BackButtonClass" onmouseenter=@(() => SelectAction(BackAction)) onclick=@(() => Hide())>
-				<div class="settings-back-icon">arrow_back</div>
-				<div class="settings-back-label">#settings.back</div>
-			</div>
+	<div class="dialog">
+		<div class="dialog-header">
+			<div class="dialog-title">#settings.title</div>
+			<div class="dialog-sub">#settings.sub</div>
 		</div>
 
-		<div class="settings-content">
-			<div class="settings-title">#settings.title</div>
-
-			<div class="settings-section">
+		<div class="dialog-body">
+			<div class="toggle-list">
 				<div class="@ClassicFeelClass" onmouseenter=@(() => SelectAction(ClassicFeelAction)) onclick=@(() => ToggleClassicFeel())>
-					<div class="settings-option-box @(GamePreferences.ReproduceClassicFeel ? "on" : "off")">
-						@if (GamePreferences.ReproduceClassicFeel)
-						{
-							<div class="settings-option-check" />
-						}
-					</div>
-
-					<div class="settings-option-card">
-						<div class="settings-option-title">#settings.classicfeel</div>
+					<div class="toggle-icon">@(GamePreferences.ReproduceClassicFeel ? "check_box" : "check_box_outline_blank")</div>
+					<div class="toggle-text">
+						<div class="toggle-name">#settings.classicfeel</div>
+						<div class="toggle-hint">#settings.classicfeel.hint</div>
 					</div>
 				</div>
 
 				<div class="@SmallScreenClass" onmouseenter=@(() => SelectAction(SmallScreenAction)) onclick=@(() => ToggleSmallScreen())>
-					<div class="settings-option-box @(GamePreferences.DisplayWithSmallScreen ? "on" : "off")">
-						@if (GamePreferences.DisplayWithSmallScreen)
-						{
-							<div class="settings-option-check" />
-						}
-					</div>
-
-					<div class="settings-option-card">
-						<div class="settings-option-title">#settings.smallscreen</div>
+					<div class="toggle-icon">@(GamePreferences.DisplayWithSmallScreen ? "check_box" : "check_box_outline_blank")</div>
+					<div class="toggle-text">
+						<div class="toggle-name">#settings.smallscreen</div>
+						<div class="toggle-hint">#settings.smallscreen.hint</div>
 					</div>
 				</div>
 			</div>
+		</div>
+
+		<div class="dialog-actions">
+			<div class="@BackButtonClass" onmouseenter=@(() => SelectAction(BackAction)) onclick=@(() => Hide())>#settings.back</div>
 		</div>
 	</div>
 </root>
 
 @code
 {
-	private const int BackAction = 0;
-	private const int ClassicFeelAction = 1;
-	private const int SmallScreenAction = 2;
-	private const float StickDeadzone = 0.1f;
-	private const float RepeatDelay = 0.4f;
-	private const float RepeatRate = 0.08f;
+	private const int ClassicFeelAction = 0;
+	private const int SmallScreenAction = 1;
+	private const int BackAction = 2;
 
 	public static SettingsPanel Current { get; private set; }
 	public bool IsVisible { get; private set; }
 
 	private int _selectedIndex = ClassicFeelAction;
-	private bool _useGamepad;
-	private bool _stickUp;
-	private bool _stickDown;
-	private float _upHoldTime;
-	private float _upNextRepeat;
-	private float _downHoldTime;
-	private float _downNextRepeat;
+	private readonly GamepadFocusInput _input = new();
 
-	private string BackButtonClass => "settings-back" + (_useGamepad && _selectedIndex == BackAction ? " selected" : "");
-	private string ClassicFeelClass => "settings-option" + (_useGamepad && _selectedIndex == ClassicFeelAction ? " selected" : "");
-	private string SmallScreenClass => "settings-option" + (_useGamepad && _selectedIndex == SmallScreenAction ? " selected" : "");
+	private string BackButtonClass => "action-btn cancel" + (_input.UseGamepad && _selectedIndex == BackAction ? " focus" : "");
+	private string ClassicFeelClass => "toggle-row" + (GamePreferences.ReproduceClassicFeel ? " selected" : "") + (_input.UseGamepad && _selectedIndex == ClassicFeelAction ? " focus" : "");
+	private string SmallScreenClass => "toggle-row" + (GamePreferences.DisplayWithSmallScreen ? " selected" : "") + (_input.UseGamepad && _selectedIndex == SmallScreenAction ? " focus" : "");
 
 	protected override void OnTreeFirstBuilt()
 	{
@@ -84,8 +63,7 @@
 		Current = this;
 		IsVisible = true;
 		_selectedIndex = ClassicFeelAction;
-		_useGamepad = useGamepad;
-		Mouse.Visibility = useGamepad ? MouseVisibility.Hidden : MouseVisibility.Visible;
+		_input.Begin(useGamepad);
 		Sound.Play("ui.popup.message.open");
 		StateHasChanged();
 	}
@@ -93,8 +71,8 @@
 	public void Hide()
 	{
 		IsVisible = false;
-		Mouse.Visibility = _useGamepad ? MouseVisibility.Hidden : MouseVisibility.Visible;
-		LibraryPanel.Current?.FocusSettingsAction(_useGamepad);
+		var wasGamepad = _input.UseGamepad;
+		LibraryPanel.Current?.FocusSettingsAction(wasGamepad);
 		Sound.Play("ui.popup.message.close");
 		StateHasChanged();
 	}
@@ -122,30 +100,18 @@
 		StateHasChanged();
 	}
 
-	private void SetGamepadMode()
-	{
-		_useGamepad = true;
-		Mouse.Visibility = MouseVisibility.Hidden;
-	}
-
-	private void DetectMouseUsage()
-	{
-		if (Mouse.Delta.Length > 5)
-		{
-			_useGamepad = false;
-			Mouse.Visibility = MouseVisibility.Visible;
-		}
-	}
+	private void SetGamepadMode() => _input.ForceGamepadMode();
 
 	protected override void OnUpdate()
 	{
 		if (!IsVisible)
 			return;
+		if (new Game.Overlay().IsOpen)
+			return;
 
-		DetectMouseUsage();
-		ReadStickEdges(out bool upEdge, out bool downEdge);
-		HandleNavRepeat("GBA_Up", upEdge, _stickUp, ref _upHoldTime, ref _upNextRepeat, NavigateUp);
-		HandleNavRepeat("GBA_Down", downEdge, _stickDown, ref _downHoldTime, ref _downNextRepeat, NavigateDown);
+		var nav = _input.TickRepeating();
+		if (nav.Up) NavigateUp();
+		if (nav.Down) NavigateDown();
 
 		if (Input.Pressed("GBA_A"))
 		{
@@ -168,48 +134,10 @@
 		}
 	}
 
-	private void ReadStickEdges(out bool upEdge, out bool downEdge)
-	{
-		float stickY = Input.GetAnalog(InputAnalog.LeftStickY);
-
-		bool up = stickY < -StickDeadzone;
-		bool down = stickY > StickDeadzone;
-
-		upEdge = up && !_stickUp;
-		downEdge = down && !_stickDown;
-
-		_stickUp = up;
-		_stickDown = down;
-	}
-
-	private void HandleNavRepeat(string action, bool stickEdge, bool stickHeld,
-		ref float holdTime, ref float nextRepeat, Action navigate)
-	{
-		if (Input.Pressed(action) || stickEdge)
-		{
-			holdTime = 0;
-			nextRepeat = RepeatDelay;
-			navigate();
-		}
-		else if (Input.Down(action) || stickHeld)
-		{
-			holdTime += Time.Delta;
-			if (holdTime >= nextRepeat)
-			{
-				nextRepeat += RepeatRate;
-				navigate();
-			}
-		}
-		else
-		{
-			holdTime = 0;
-		}
-	}
-
 	private void NavigateUp()
 	{
 		SetGamepadMode();
-		if (_selectedIndex > BackAction)
+		if (_selectedIndex > ClassicFeelAction)
 		{
 			_selectedIndex--;
 			Sound.Play("ui.button.over");
@@ -219,7 +147,7 @@
 	private void NavigateDown()
 	{
 		SetGamepadMode();
-		if (_selectedIndex < SmallScreenAction)
+		if (_selectedIndex < BackAction)
 		{
 			_selectedIndex++;
 			Sound.Play("ui.button.over");
@@ -228,6 +156,6 @@
 
 	protected override int BuildHash()
 	{
-		return HashCode.Combine(IsVisible, _selectedIndex, _useGamepad, GamePreferences.ReproduceClassicFeel, GamePreferences.DisplayWithSmallScreen);
+		return HashCode.Combine(IsVisible, _selectedIndex, _input.UseGamepad, GamePreferences.ReproduceClassicFeel, GamePreferences.DisplayWithSmallScreen);
 	}
 }

@@ -2,7 +2,7 @@ $accent: rgba( 79, 114, 245, 1 );
 $accent-soft: rgba( 79, 114, 245, 0.18 );
 $accent-border: rgba( 79, 114, 245, 0.5 );
 
-SettingsPanel
+HostDialog
 {
 	position: absolute;
 	left: 0;
@@ -66,20 +66,13 @@ SettingsPanel
 	.dialog-header
 	{
 		flex-direction: column;
-		gap: 4px;
 		padding: 22px 26px 4px 26px;
 
-		.dialog-title
+		.dialog-rom
 		{
 			font-size: 18px;
-			font-weight: 600;
+			font-weight: 500;
 			color: white;
-		}
-
-		.dialog-sub
-		{
-			font-size: 12px;
-			color: rgba( 255, 255, 255, 0.55 );
 		}
 	}
 
@@ -90,13 +83,25 @@ SettingsPanel
 		padding: 24px 26px 22px 26px;
 	}
 
-	.toggle-list
+	.field
+	{
+		flex-direction: column;
+		gap: 10px;
+
+		.field-label
+		{
+			font-size: 13px;
+			color: rgba( 255, 255, 255, 0.55 );
+		}
+	}
+
+	.vis-options
 	{
 		flex-direction: column;
 		gap: 6px;
 	}
 
-	.toggle-row
+	.vis-option
 	{
 		flex-direction: row;
 		align-items: center;
@@ -121,9 +126,10 @@ SettingsPanel
 		{
 			background-color: $accent;
 
-			.toggle-icon { color: white; }
-			.toggle-name { color: white; }
-			.toggle-hint { color: white; opacity: 0.85; }
+			.vis-icon { color: white; }
+			.vis-name { color: white; }
+			.vis-hint { color: white; opacity: 0.85; }
+			.vis-check { color: white; }
 
 			&:hover { background-color: rgba( 130, 160, 255, 1 ); }
 		}
@@ -133,35 +139,78 @@ SettingsPanel
 			background-color: rgba( 130, 160, 255, 1 );
 		}
 
-		.toggle-icon
+		.vis-icon
 		{
 			font-family: Material Icons;
-			font-size: 22px;
+			font-size: 20px;
 			color: rgba( 255, 255, 255, 0.85 );
-			width: 24px;
+			width: 22px;
 			text-align: center;
 		}
 
-		.toggle-text
+		.vis-text
 		{
 			flex-direction: column;
 			gap: 2px;
 			flex-grow: 1;
 
-			.toggle-name
+			.vis-name
 			{
 				font-size: 13px;
 				font-weight: 600;
 				color: rgba( 255, 255, 255, 0.9 );
 			}
 
-			.toggle-hint
+			.vis-hint
 			{
 				font-size: 11px;
 				font-weight: 500;
 				color: rgba( 255, 255, 255, 0.7 );
 			}
 		}
+
+		.vis-check
+		{
+			font-family: Material Icons;
+			font-size: 16px;
+			color: transparent;
+			width: 16px;
+			text-align: center;
+		}
+	}
+
+	.max-options
+	{
+		flex-direction: row;
+		gap: 6px;
+	}
+
+	.max-option
+	{
+		flex-grow: 1;
+		height: 40px;
+		align-items: center;
+		justify-content: center;
+		font-size: 13px;
+		font-weight: 500;
+		color: rgba( 255, 255, 255, 0.85 );
+		background-color: rgba( 255, 255, 255, 0.05 );
+		border-radius: 4px;
+		cursor: pointer;
+		transition: background-color 0.12s ease, color 0.12s ease;
+
+		&:hover { background-color: rgba( 255, 255, 255, 0.09 ); }
+		&.focus { background-color: rgba( 255, 255, 255, 0.13 ); }
+
+		&.selected
+		{
+			background-color: $accent;
+			color: white;
+
+			&:hover { background-color: rgba( 130, 160, 255, 1 ); }
+		}
+
+		&.selected.focus { background-color: rgba( 130, 160, 255, 1 ); }
 	}
 
 	.dialog-actions
@@ -188,6 +237,15 @@ SettingsPanel
 
 			&:hover { background-color: rgba( 255, 255, 255, 0.07 ); color: white; }
 			&.focus { background-color: rgba( 255, 255, 255, 0.1 ); color: white; }
+		}
+
+		&.confirm
+		{
+			color: white;
+			background-color: $accent;
+
+			&:hover { background-color: rgba( 130, 160, 255, 1 ); }
+			&.focus { background-color: rgba( 130, 160, 255, 1 ); }
 		}
 	}
 }

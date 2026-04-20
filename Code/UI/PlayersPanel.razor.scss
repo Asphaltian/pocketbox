@@ -1,0 +1,131 @@
+PlayersPanel
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	pointer-events: none;
+	font-family: Poppins;
+	z-index: 50;
+	flex-direction: column;
+	align-items: flex-start;
+	padding: 24px;
+	gap: 6px;
+	opacity: 0;
+	transform: translateX( -12px );
+	transition: opacity 0.2s ease, transform 0.2s ease;
+
+	&.visible
+	{
+		opacity: 1;
+		transform: translateX( 0 );
+	}
+
+	// In-game HUD: compact, dim
+	&:not(.paused)
+	{
+		opacity: 0;
+	}
+
+	&.visible:not(.paused)
+	{
+		opacity: 0.6;
+
+		.player-card
+		{
+			padding: 4px 8px;
+			min-width: 0;
+			gap: 8px;
+			background-color: transparent;
+
+			.avatar { width: 28px; height: 28px; }
+			.info .name { display: none; }
+			.info .empty-label { display: none; }
+			.slot-tag { font-size: 10px; }
+			.ping { display: none; }
+		}
+	}
+
+	.player-card
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 12px;
+		min-width: 240px;
+		background-color: rgba( 18, 21, 28, 0.85 );
+		border-radius: 4px;
+
+		&.empty
+		{
+			background-color: rgba( 18, 21, 28, 0.55 );
+		}
+
+		&.local
+		{
+			background-color: rgba( 79, 114, 245, 0.25 );
+		}
+
+		.avatar
+		{
+			width: 28px;
+			height: 28px;
+			border-radius: 3px;
+			background-size: cover;
+			background-position: center;
+			flex-shrink: 0;
+
+			&.empty
+			{
+				background-color: rgba( 0, 0, 0, 0.4 );
+				align-items: center;
+				justify-content: center;
+
+				i
+				{
+					font-family: Material Icons;
+					font-size: 14px;
+					color: rgba( 255, 255, 255, 0.4 );
+				}
+			}
+		}
+
+		.info
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			justify-content: center;
+			gap: 0px;
+
+			.slot-tag
+			{
+				font-size: 11px;
+				font-weight: 500;
+				color: rgba( 255, 255, 255, 0.5 );
+				letter-spacing: 0.3px;
+			}
+
+			.name
+			{
+				font-size: 13px;
+				color: white;
+			}
+
+			.empty-label
+			{
+				font-size: 12px;
+				color: rgba( 255, 255, 255, 0.35 );
+			}
+		}
+
+		&.local .info .slot-tag
+		{
+			color: rgba( 130, 160, 255, 1 );
+		}
+
+		.ping
+		{
+			font-size: 11px;
+			color: rgba( 255, 255, 255, 0.45 );
+		}
+	}
+}

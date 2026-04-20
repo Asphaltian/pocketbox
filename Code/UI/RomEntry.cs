@@ -12,5 +12,6 @@ public sealed class RomEntry( string path, string displayTitle, string region,
 	public string Publisher { get; } = publisher;
 	public string ThumbnailUrl { get; } = thumbnailUrl;
 	public BaseFileSystem FileSystem { get; } = fileSystem;
+	public bool SupportsWirelessAdapter => WirelessAdapterDatabase.Supports( GameCode );
 }
 

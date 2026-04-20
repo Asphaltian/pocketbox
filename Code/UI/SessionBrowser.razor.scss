@@ -1,0 +1,297 @@
+$accent: rgba( 79, 114, 245, 1 );
+
+SessionBrowser
+{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	font-family: Poppins;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: opacity 0.2s ease;
+
+	&.visible
+	{
+		opacity: 1;
+		pointer-events: all;
+
+		.dialog-bg
+		{
+			opacity: 1;
+			backdrop-filter: blur(14px);
+		}
+
+		.dialog
+		{
+			opacity: 1;
+			transform: translateY( 0 ) scale( 1 );
+		}
+	}
+
+	.dialog-bg
+	{
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		background-color: rgba( 0, 0, 0, 0.55 );
+		opacity: 0;
+		backdrop-filter: blur(0px);
+		transition: opacity 0.25s ease, backdrop-filter 0.3s ease;
+	}
+
+	.dialog
+	{
+		position: relative;
+		flex-direction: column;
+		min-width: 520px;
+		max-width: 600px;
+		max-height: 70%;
+		background-color: rgba( 18, 21, 28, 0.96 );
+		border-radius: 8px;
+		box-shadow: 0px 24px 60px rgba( 0, 0, 0, 0.55 );
+		opacity: 0;
+		transform: translateY( 12px ) scale( 0.97 );
+		transition: opacity 0.22s ease, transform 0.22s ease;
+	}
+
+	.dialog-header
+	{
+		flex-direction: column;
+		gap: 4px;
+		padding: 22px 26px 4px 26px;
+
+		.dialog-title
+		{
+			font-size: 18px;
+			font-weight: 500;
+			color: white;
+		}
+
+		.dialog-sub
+		{
+			font-size: 12px;
+			color: rgba( 255, 255, 255, 0.55 );
+		}
+	}
+
+	.dialog-body
+	{
+		flex-direction: column;
+		gap: 12px;
+		padding: 24px 26px 22px 26px;
+		overflow: hidden;
+	}
+
+	.status
+	{
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		padding: 40px 0;
+		color: rgba( 255, 255, 255, 0.55 );
+		font-size: 13px;
+
+		i
+		{
+			font-family: Material Icons;
+			font-size: 36px;
+			color: rgba( 255, 255, 255, 0.35 );
+		}
+	}
+
+	.lobby-list
+	{
+		flex-direction: column;
+		gap: 6px;
+		overflow: scroll;
+		max-height: 360px;
+	}
+
+	.lobby-row
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 14px;
+		padding: 12px 14px;
+		background-color: rgba( 255, 255, 255, 0.05 );
+		border-radius: 4px;
+		cursor: pointer;
+		transition: background-color 0.12s ease;
+
+		&:hover { background-color: rgba( 255, 255, 255, 0.09 ); }
+		&.focus { background-color: rgba( 255, 255, 255, 0.13 ); }
+
+		&.full
+		{
+			cursor: default;
+			opacity: 0.45;
+			&:hover { background-color: rgba( 255, 255, 255, 0.05 ); }
+		}
+
+		.host-avatar
+		{
+			width: 44px;
+			height: 44px;
+			border-radius: 4px;
+			background-color: rgba( 255, 255, 255, 0.08 );
+		}
+
+		.lobby-text
+		{
+			flex-direction: column;
+			gap: 4px;
+			flex-grow: 1;
+			min-width: 0;
+
+			.lobby-rom
+			{
+				font-size: 14px;
+				font-weight: 600;
+				color: rgba( 255, 255, 255, 0.95 );
+				white-space: nowrap;
+				text-overflow: ellipsis;
+				overflow: hidden;
+			}
+
+			.lobby-sub
+			{
+				flex-direction: row;
+				align-items: center;
+				gap: 8px;
+				font-size: 11px;
+				color: rgba( 255, 255, 255, 0.55 );
+
+				.host-name
+				{
+					color: rgba( 255, 255, 255, 0.7 );
+					font-weight: 500;
+					white-space: nowrap;
+					text-overflow: ellipsis;
+					overflow: hidden;
+					max-width: 160px;
+				}
+
+				.chip
+				{
+					flex-direction: row;
+					align-items: center;
+					gap: 4px;
+					padding: 2px 7px;
+					background-color: rgba( 255, 255, 255, 0.07 );
+					border-radius: 3px;
+					font-size: 10px;
+					font-weight: 600;
+					letter-spacing: 0.3px;
+					color: rgba( 255, 255, 255, 0.75 );
+					text-transform: uppercase;
+
+					.micon
+					{
+						font-family: Material Icons;
+						font-size: 11px;
+						color: rgba( 255, 255, 255, 0.7 );
+						text-transform: none;
+					}
+
+					&.code { color: rgba( 130, 200, 255, 0.95 ); background-color: rgba( 60, 110, 180, 0.18 ); }
+					&.vis { color: rgba( 200, 200, 200, 0.9 ); }
+				}
+			}
+		}
+
+		.lobby-meta
+		{
+			flex-direction: column;
+			align-items: flex-end;
+			gap: 4px;
+
+			.lobby-count
+			{
+				flex-direction: row;
+				align-items: center;
+				gap: 4px;
+				font-size: 13px;
+				font-weight: 600;
+				color: rgba( 255, 255, 255, 0.85 );
+
+				.micon
+				{
+					font-family: Material Icons;
+					font-size: 14px;
+					color: rgba( 255, 255, 255, 0.6 );
+				}
+
+				.count-text { flex-direction: row; align-items: baseline; color: rgba( 255, 255, 255, 0.85 ); }
+				.count-sep { color: rgba( 255, 255, 255, 0.4 ); margin: 0 1px; }
+			}
+
+			.lobby-status
+			{
+				font-size: 9px;
+				font-weight: 600;
+				text-transform: uppercase;
+				letter-spacing: 0.6px;
+				padding: 2px 6px;
+				border-radius: 3px;
+
+				&.is-open { color: rgba( 130, 220, 150, 0.95 ); background-color: rgba( 60, 180, 100, 0.12 ); }
+				&.is-full { color: rgba( 255, 150, 130, 0.95 ); background-color: rgba( 200, 90, 70, 0.12 ); }
+			}
+		}
+	}
+
+	.error
+	{
+		font-size: 12px;
+		font-weight: 500;
+		color: rgba( 255, 120, 120, 0.95 );
+		background-color: rgba( 255, 80, 80, 0.1 );
+		border-radius: 4px;
+		padding: 10px 12px;
+	}
+
+	.dialog-actions
+	{
+		flex-direction: row;
+		justify-content: flex-end;
+		gap: 8px;
+		padding: 16px 26px;
+	}
+
+	.action-btn
+	{
+		padding: 10px 22px;
+		font-size: 13px;
+		font-weight: 600;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: background-color 0.12s ease, color 0.12s ease;
+
+		&.cancel
+		{
+			color: rgba( 255, 255, 255, 0.65 );
+			background-color: transparent;
+
+			&:hover { background-color: rgba( 255, 255, 255, 0.07 ); color: white; }
+			&.focus { background-color: rgba( 255, 255, 255, 0.1 ); color: white; }
+		}
+
+		&.refresh
+		{
+			color: white;
+			background-color: $accent;
+
+			&:hover { background-color: rgba( 130, 160, 255, 1 ); }
+			&.focus { background-color: rgba( 130, 160, 255, 1 ); }
+		}
+	}
+}

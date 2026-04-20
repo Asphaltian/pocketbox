@@ -125,57 +125,227 @@
             "component_type": "CameraComponent"
           },
           "ZIndex": 100
-        },
-        {
-          "__type": "sGBA.LibraryPanel",
-          "__guid": "39172d4c-2023-4acd-aa07-12c6ae8c224e",
-          "__enabled": true,
-          "Flags": 0,
-          "OnComponentDestroy": null,
-          "OnComponentDisabled": null,
-          "OnComponentEnabled": null,
-          "OnComponentFixedUpdate": null,
-          "OnComponentStart": null,
-          "OnComponentUpdate": null
-        },
-        {
-          "__type": "sGBA.SettingsPanel",
-          "__guid": "1bcf0e52-75c1-4270-ad3e-2296ad9553ab",
-          "__enabled": true,
-          "Flags": 0,
-          "OnComponentDestroy": null,
-          "OnComponentDisabled": null,
-          "OnComponentEnabled": null,
-          "OnComponentFixedUpdate": null,
-          "OnComponentStart": null,
-          "OnComponentUpdate": null
-        },
-        {
-          "__type": "sGBA.PauseMenu",
-          "__guid": "76128ec0-c147-4051-8bf4-22189153aee3",
-          "__enabled": true,
-          "Flags": 0,
-          "OnComponentDestroy": null,
-          "OnComponentDisabled": null,
-          "OnComponentEnabled": null,
-          "OnComponentFixedUpdate": null,
-          "OnComponentStart": null,
-          "OnComponentUpdate": null
-        },
-        {
-          "__type": "sGBA.GameScreen",
-          "__guid": "09e72b78-f241-41d0-8362-19349632b868",
-          "__enabled": true,
-          "Flags": 0,
-          "OnComponentDestroy": null,
-          "OnComponentDisabled": null,
-          "OnComponentEnabled": null,
-          "OnComponentFixedUpdate": null,
-          "OnComponentStart": null,
-          "OnComponentUpdate": null
         }
       ],
-      "Children": []
+      "Children": [
+        {
+          "__guid": "7ac65c49-daa0-40c2-aaa2-8da243c93f03",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Library Panel",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "sGBA.LibraryPanel",
+              "__guid": "d06cd5fc-19cb-4dcf-bd5c-4a04cdba8b1e",
+              "__enabled": true,
+              "Flags": 0,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "67dc7a18-1d8f-4055-8159-a30ad3517db8",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Host Dialog",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "sGBA.HostDialog",
+              "__guid": "4640a717-7dfc-4cb0-8f4b-5c9b5f3b25bd",
+              "__enabled": true,
+              "Flags": 0,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "5b21cf04-9ad3-4f7e-b0a3-7a8b4e2f1c01",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Session Browser",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "sGBA.SessionBrowser",
+              "__guid": "9c3e72b8-1f4d-44d7-a6b5-2e89c0f3e771",
+              "__enabled": true,
+              "Flags": 0,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "b33ea2f1-6c92-497c-86cb-e0221e45859e",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Settings Panel",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "sGBA.SettingsPanel",
+              "__guid": "3d82184c-92f1-49dc-8d1f-ae751fece6b5",
+              "__enabled": true,
+              "Flags": 0,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "21a82f1d-d8c2-43c8-a942-cf716873dd65",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Players Panel",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "sGBA.PlayersPanel",
+              "__guid": "d7e8fec6-591a-4498-a4ee-34e9d5bd7647",
+              "__enabled": true,
+              "Flags": 0,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "0413ddee-46f5-4b9c-af12-7ddcf9eb8e23",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Pause Menu",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "sGBA.PauseMenu",
+              "__guid": "cd8cbe56-7103-4c11-a00f-31a13ab0cc8e",
+              "__enabled": true,
+              "Flags": 0,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          ],
+          "Children": []
+        },
+        {
+          "__guid": "3823503d-7dd3-44c1-9483-177ac3d14325",
+          "__version": 2,
+          "Flags": 0,
+          "Name": "Game Screen",
+          "Position": "0,0,0",
+          "Rotation": "0,0,0,1",
+          "Scale": "1,1,1",
+          "Tags": "",
+          "Enabled": true,
+          "NetworkMode": 2,
+          "NetworkFlags": 0,
+          "NetworkOrphaned": 0,
+          "NetworkTransmit": true,
+          "OwnerTransfer": 1,
+          "Components": [
+            {
+              "__type": "sGBA.GameScreen",
+              "__guid": "11f2aa7b-594f-4ed9-a21f-87b807425dc4",
+              "__enabled": true,
+              "Flags": 0,
+              "OnComponentDestroy": null,
+              "OnComponentDisabled": null,
+              "OnComponentEnabled": null,
+              "OnComponentFixedUpdate": null,
+              "OnComponentStart": null,
+              "OnComponentUpdate": null
+            }
+          ],
+          "Children": []
+        }
+      ]
     },
     {
       "__guid": "180a432d-e42b-479f-82c3-a54cfc9aa495",
@@ -210,10 +380,10 @@
       "Children": []
     },
     {
-      "__guid": "78efe1f4-2caf-4185-8754-49149b683127",
+      "__guid": "f0fbebc5-7856-4b94-aa34-2115bfd3637a",
       "__version": 2,
       "Flags": 0,
-      "Name": "Wireless Adapter",
+      "Name": "Network Manager",
       "Position": "0,0,0",
       "Rotation": "0,0,0,1",
       "Scale": "1,1,1",
@@ -226,8 +396,8 @@
       "OwnerTransfer": 1,
       "Components": [
         {
-          "__type": "sGBA.WirelessAdapterComponent",
-          "__guid": "92af48c8-c6ea-49ce-a3d5-90b1a086e196",
+          "__type": "sGBA.NetworkManager",
+          "__guid": "212195a1-3444-4b48-8dd4-80e565eeb3d4",
           "__enabled": true,
           "Flags": 0,
           "OnComponentDestroy": null,
@@ -263,13 +433,13 @@
       "CustomBounds": false
     },
     "GameObjectSystems": {
-      "Sandbox.Clutter.ClutterGridSystem": {
-        "Storage": {
-          "$blob": "d0670846-e405-40c6-a499-34ef0c05fda7"
-        }
-      },
       "Sandbox.MovieMaker.MovieRecorderSystem": {
         "DisableClientRecording": false
+      },
+      "Sandbox.Clutter.ClutterGridSystem": {
+        "Storage": {
+          "$blob": "bf7a7a65-6112-4f1e-beb6-d65fbf74dff6"
+        }
       }
     }
   },
