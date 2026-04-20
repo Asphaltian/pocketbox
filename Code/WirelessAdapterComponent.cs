@@ -90,7 +90,7 @@ public sealed class WirelessAdapterComponent : Component, IWirelessNetwork, Comp
 			RpcReceive( payload );
 	}
 
-	[Rpc.Broadcast( NetFlags.Reliable )]
+	[Rpc.Broadcast( NetFlags.Reliable | NetFlags.SendImmediate )]
 	private void RpcReceive( byte[] payload )
 	{
 		if ( Rpc.Caller == Connection.Local )
