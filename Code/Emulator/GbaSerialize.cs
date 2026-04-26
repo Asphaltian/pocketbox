@@ -374,9 +374,9 @@ public static class GbaSerialize
 			var c = dma.Channels[i];
 			w.Write( c.SrcLow ); w.Write( c.SrcHigh );
 			w.Write( c.DstLow ); w.Write( c.DstHigh );
-			w.Write( c.Count ); w.Write( c.Reg );
+			w.Write( c.CntLo ); w.Write( c.Reg );
 			w.Write( c.NextSource ); w.Write( c.NextDest );
-			w.Write( c.NextCount ); w.Write( c.Latch );
+			w.Write( c.NextCount ); w.Write( c.Count ); w.Write( c.Latch );
 			w.Write( c.When ); w.Write( c.Cycles );
 			w.Write( c.IsFirstUnit );
 			w.Write( c.SourceOffset ); w.Write( c.DestOffset );
@@ -395,9 +395,9 @@ public static class GbaSerialize
 			var c = dma.Channels[i];
 			c.SrcLow = r.ReadUInt16(); c.SrcHigh = r.ReadUInt16();
 			c.DstLow = r.ReadUInt16(); c.DstHigh = r.ReadUInt16();
-			c.Count = r.ReadUInt16(); c.Reg = r.ReadUInt16();
+			c.CntLo = r.ReadUInt16(); c.Reg = r.ReadUInt16();
 			c.NextSource = r.ReadUInt32(); c.NextDest = r.ReadUInt32();
-			c.NextCount = r.ReadInt32(); c.Latch = r.ReadUInt32();
+			c.NextCount = r.ReadInt32(); c.Count = r.ReadInt32(); c.Latch = r.ReadUInt32();
 			c.When = r.ReadInt64(); c.Cycles = r.ReadInt32();
 			c.IsFirstUnit = r.ReadBoolean();
 			c.SourceOffset = r.ReadInt32(); c.DestOffset = r.ReadInt32();

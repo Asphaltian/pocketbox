@@ -880,7 +880,7 @@ public class GbaIo
 						case 2: Gba.Dma.Channels[ch].SrcHigh = value; break;
 						case 4: Gba.Dma.Channels[ch].DstLow = value; break;
 						case 6: Gba.Dma.Channels[ch].DstHigh = value; break;
-						case 8: Gba.Dma.Channels[ch].Count = value; break;
+						case 8: Gba.Dma.Channels[ch].CntLo = value; break;
 						case 10: Gba.Dma.WriteControl( ch, value ); break;
 					}
 					break;

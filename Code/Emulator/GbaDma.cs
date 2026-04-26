@@ -46,9 +46,11 @@ public class GbaDmaController
 		if ( wasEnabled || (value & 0x8000) == 0 )
 			return;
 
-		c.NextSource = c.Source & SrcMask[ch] & ~(width - 1);
-		c.NextDest = c.Dest & DstMask[ch] & ~(width - 1);
+		c.NextSource = c.Source & SrcMask[ch];
+		c.NextDest = c.Dest & DstMask[ch];
 		c.DestInvalid = ch < 3 && c.Dest >= 0x08000000;
+
+		c.Reload();
 
 		if ( (c.NextSource & (width - 1)) != 0 && GbaLog.FilterTest( LogCategory.GBADMA, LogLevel.GameError ) )
 			GbaLog.Write( LogCategory.GBADMA, LogLevel.GameError, $"Misaligned DMA source address: 0x{c.NextSource:X8}" );
@@ -59,19 +61,20 @@ public class GbaDmaController
 			GbaLog.Write( LogCategory.GBADMA, LogLevel.Info,
 				$"Starting DMA {ch} 0x{c.NextSource:X8} -> 0x{c.NextDest:X8} ({c.Reg:X4}:{c.Count:X4})" );
 
+		c.NextSource &= ~(width - 1);
+		c.NextDest &= ~(width - 1);
+
 		int timing = (value >> 12) & 3;
 		if ( timing == 0 )
 		{
-			ScheduleDma( c );
+			c.NextCount = c.Count;
+			c.When = Gba.Cpu.InstructionStartCycles + 3;
+			c.IsFirstUnit = true;
+			Update();
 		}
 		else if ( timing == 3 && ch == 0 )
 		{
 			GbaLog.Write( LogCategory.GBADMA, LogLevel.Warn, "Discarding invalid DMA0 scheduling" );
-		}
-		else if ( timing == 3 && (ch == 1 || ch == 2) )
-		{
-			c.Reg = (ushort)((c.Reg & ~0x0060) | 0x0040 | 0x0400);
-			c.DestOffset = 0;
 		}
 	}
 
@@ -86,14 +89,6 @@ public class GbaDmaController
 		c.DestOffset = OffsetDir[(control >> 5) & 3] * (int)width;
 	}
 
-	private void ScheduleDma( GbaDma c )
-	{
-		c.When = Gba.Cpu.InstructionStartCycles + 3;
-		c.NextCount = c.EffectiveCount;
-		c.IsFirstUnit = true;
-		Update();
-	}
-
 	public void OnHBlank() => TriggerByTiming( 2 );
 	public void OnVBlank() => TriggerByTiming( 1 );
 
@@ -105,11 +100,13 @@ public class GbaDmaController
 			var c = Channels[i];
 			if ( (c.Reg & 0x8000) == 0 ) continue;
 			if ( ((c.Reg >> 12) & 3) != timing ) continue;
-			if ( c.NextCount != 0 ) continue;
 
 			c.When = Gba.Cpu.Cycles + 3;
-			c.NextCount = c.EffectiveCount;
-			c.IsFirstUnit = true;
+			if ( c.NextCount == 0 )
+			{
+				c.NextCount = c.Count;
+				c.IsFirstUnit = true;
+			}
 			found = true;
 		}
 
@@ -121,9 +118,14 @@ public class GbaDmaController
 		var c = Channels[3];
 		if ( (c.Reg & 0x8000) == 0 ) return;
 		if ( ((c.Reg >> 12) & 3) != 3 ) return;
-		if ( c.NextCount != 0 ) return;
 
-		ScheduleDma( c );
+		c.When = Gba.Cpu.Cycles + 3;
+		if ( c.NextCount == 0 )
+		{
+			c.NextCount = c.Count;
+			c.IsFirstUnit = true;
+		}
+		Update();
 	}
 
 	public void OnFifo( int channel )
@@ -136,6 +138,8 @@ public class GbaDmaController
 		c.When = Gba.Cpu.Cycles;
 		c.NextCount = 4;
 		c.IsFirstUnit = true;
+		c.Reg = (ushort)((c.Reg & ~0x0060) | 0x0040 | 0x0400);
+		c.DestOffset = 0;
 		Update();
 	}
 
@@ -314,7 +318,12 @@ public class GbaDmaController
 		{
 			ch.Reg &= unchecked((ushort)~0x8000);
 		}
-		else if ( ((ch.Reg >> 5) & 3) == 3 )
+		else
+		{
+			ch.Reload();
+		}
+
+		if ( ((ch.Reg >> 5) & 3) == 3 )
 		{
 			ch.NextDest = ch.Dest & DstMask[number];
 		}
@@ -331,12 +340,13 @@ public class GbaDma
 	public int Index;
 	public ushort SrcLow, SrcHigh;
 	public ushort DstLow, DstHigh;
-	public ushort Count;
+	public ushort CntLo;
 	public ushort Reg;
 
 	public uint NextSource;
 	public uint NextDest;
 	public int NextCount;
+	public int Count;
 	public uint Latch;
 
 	public long When;
@@ -350,27 +360,33 @@ public class GbaDma
 	public uint Source => (uint)(SrcLow | (SrcHigh << 16));
 	public uint Dest => (uint)(DstLow | (DstHigh << 16));
 
-	public int EffectiveCount
+	public void Reload()
 	{
-		get
+		int count = CntLo;
+		if ( Index == 3 )
 		{
-			int count = Count;
-			if ( Index < 3 ) count &= 0x3FFF;
-			if ( count == 0 ) count = Index == 3 ? 0x10000 : 0x4000;
-			return count;
+			if ( count == 0 ) count = 0x10000;
 		}
+		else
+		{
+			count &= 0x3FFF;
+			if ( count == 0 ) count = 0x4000;
+		}
+		Count = count;
 	}
 
 	public GbaDma( int index )
 	{
 		Index = index;
+		Count = index == 3 ? 0x10000 : 0x4000;
 	}
 
 	public void Reset()
 	{
-		SrcLow = SrcHigh = DstLow = DstHigh = Count = Reg = 0;
+		SrcLow = SrcHigh = DstLow = DstHigh = CntLo = Reg = 0;
 		NextSource = NextDest = 0;
 		NextCount = 0;
+		Count = Index == 3 ? 0x10000 : 0x4000;
 		Latch = 0;
 		When = 0;
 		Cycles = 0;
