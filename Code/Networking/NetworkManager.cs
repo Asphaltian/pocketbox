@@ -231,15 +231,23 @@ public sealed class NetworkManager : Component, IWirelessNetwork, Component.INet
 		var match = FindLocalRomMatch( RomSha1, RomGameCode );
 		if ( match is null )
 		{
-			var message = $"You don't have a matching ROM for '{RomTitle}' (code {RomGameCode}). Add it to your library and rejoin.";
-			Log.Warning( $"[sGBA] Join: {message}" );
-			JoinFailed?.Invoke( message );
-			Leave();
+			Log.Warning( $"[sGBA] Join: no matching ROM for '{RomTitle}' (code {RomGameCode}); requesting kick." );
+			RpcRequestMissingRomKick( RomTitle ?? string.Empty );
 			return;
 		}
 
 		EmulatorComponent.Current?.Restart( match.Path );
 		LibraryPanel.Current?.Hide();
+	}
+
+	[Rpc.Host( NetFlags.Reliable | NetFlags.SendImmediate )]
+	private void RpcRequestMissingRomKick( string romTitle )
+	{
+		var caller = Rpc.Caller;
+		if ( caller is null || caller == Connection.Local )
+			return;
+
+		caller.Kick( $"Missing ROM for '{romTitle}'." );
 	}
 
 	private static RomEntry FindLocalRomMatch( string sha1, string gameCode )

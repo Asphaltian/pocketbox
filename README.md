@@ -20,14 +20,13 @@ A Game Boy Advance emulator for [s&box](https://github.com/Facepunch/sbox-public
 1. Install [s&box](https://sbox.game) on Steam.
 2. Clone this repository into any folder.
 3. Open the project in the s&box editor.
-4. Select the `Emulator` GameObject in minimal.scene and set the **ROM Path** property to a `.gba` file in `EmulatorComponent`.
-5. Press Play.
+5. Press Play!
 
 > **Note:** Copyrighted ROMs and BIOS files are not included, you must provide your own.
 
 ## Roadmap
 
-A frontend for browsing, launching, and configuring games is planned for a future release on the platform. Full documentation and an API reference for creating addons or integrating sGBA into your own projects are also planned.
+Full documentation and an API reference for creating addons or integrating sGBA into your own projects are planned.
 
 ## Contributing
 
