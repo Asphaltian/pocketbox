@@ -120,19 +120,10 @@
 		_queryCts?.Cancel();
 		_queryCts?.Dispose();
 		_queryCts = null;
-
-		if ( NetworkManager.Current is not null )
-			NetworkManager.Current.JoinFailed -= OnJoinFailed;
 	}
 
 	public void Open( bool useGamepad = false )
 	{
-		if ( NetworkManager.Current is not null )
-		{
-			NetworkManager.Current.JoinFailed -= OnJoinFailed;
-			NetworkManager.Current.JoinFailed += OnJoinFailed;
-		}
-
 		_visible = true;
 		_error = null;
 		_focusGroup = FocusGroup.Lobbies;

@@ -24,8 +24,6 @@ public sealed class NetworkManager : Component, IWirelessNetwork, Component.INet
 	public string RomSha1 { get; private set; }
 	public string RomGameCode { get; private set; }
 
-	public event Action<string> JoinFailed;
-
 	public IReadOnlyList<SessionPlayer> Players => GetLivePlayers();
 	public SessionPlayer LocalPlayer => GetLivePlayers().FirstOrDefault( p => p.IsLocal );
 
